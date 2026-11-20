@@ -59,7 +59,7 @@ const scope={ready:Promise.resolve(),companyId:company,auth:{session:ref({compan
  if(url==='/api/after-sales/products/unit-0')return clone({product:units[0],agreements:[{...agreement,status:'ACTIVE',starts_on:'2026-10-01',next_due:'2026-11-01'}],jobs:job.value?[{...job.value,agreement_id:'agreement',agreement_name:'Quarterly check'}]:[],readings:[],history:[]})
  if(url==='/api/after-sales/configurations/preview')return {token:'preview-token',before:{name:config.name,rules:config.rules},after:options.body,agreements:[{id:'agreement',reference:'MP-1',customer_name:'Client',next_due:'2026-11-01',proposedNextDue:'2026-12-01',booked_visits:1}]}
  if(url==='/api/after-sales/configurations/archive'){config.archived=options.body.archived;return {id:config.id}}
- if(url==='/api/after-sales/configurations'&&options.body){const data=options.body;if(data.id)Object.assign(config,JSON.parse(JSON.stringify(data)),{revision:config.revision+1});else configs.push({...JSON.parse(JSON.stringify(data)),id:'new-'+configs.length,revision:1,archived:false});return {id:config.id}}
+ if(url==='/api/after-sales/configurations'&&options.body){const data=options.body;if(data.id)Object.assign(config,JSON.parse(JSON.stringify(data)),{revision:config.revision+1});else {const created={...JSON.parse(JSON.stringify(data)),id:'new-'+configs.length,revision:1,archived:false};configs.push(created);return {id:created.id}}return {id:config.id}}
  if(url==='/api/after-sales/configurations')return JSON.parse(JSON.stringify(configs))
  if(url==='/api/after-sales/staff')return [{id:'staff',name:'Technician'}]
  if(url==='/api/after-sales/catalog')return JSON.parse(JSON.stringify(catalog))
@@ -134,6 +134,12 @@ try{
  const planCount=configs.length;document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Duplicate');await submit();assert(configs.length===planCount+1&&configs.at(-1).name.endsWith(' (copy)'),'Duplicating creates a new plan without editing the original')
  document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Archive')
  mode.value='selector';selected.value=['config'];await wait();assert(document.body.textContent.includes('Quarterly check'),'Previously linked archived configuration retained')
+
+ for(const kind of ['WARRANTY','GUARANTEE','MAINTENANCE']){
+   const planName='Quick '+kind.toLowerCase();const panel=[...document.querySelectorAll('section')].find(el=>el.textContent.includes('Warranty, guarantee and maintenance'));panel.querySelector('button').click();await wait();
+   const search=document.querySelector('[role="combobox"]');assert(search,'Plan search available');search.value=planName;search.dispatchEvent(new Event('input',{bubbles:true}));await click("Create '"+planName+"'");
+   await until(()=>document.querySelector('[role="dialog"]'),'Quick plan modal opens');await fill('Plan type',kind);assert(document.querySelector('[role="dialog"]').textContent.includes(kind==='MAINTENANCE'?'Visit schedule':'Coverage duration'),'Plan rules match selected type');await submit();await until(()=>!document.querySelector('[role="dialog"]'),'Quick plan closes after save');assert(selected.value.includes(config.id)&&selected.value.includes(configs.at(-1).id),'New plan selected and existing selections preserved');assert(document.body.textContent.includes(planName),'New plan selected with name');
+ }
  mode.value='items';await wait();await click('New charge');assert(document.querySelector('[aria-label="Service charge category"]')?.value==='Service Charges','Charge form shows the automatic category');assert(document.querySelector('[aria-label="Service charge category"]')?.disabled,'Automatic charge category is read-only');await fill('Charge name','Inspection');await fill('Default rate before tax','200');await submit()
  assert(catalog.charges.some(c=>c.name==='Inspection'&&c.rate===200),'Reusable charge created')
  let inspectionRow=[...document.querySelectorAll('tbody tr')].find(row=>row.textContent.includes('Inspection'));inspectionRow.querySelector('button').click();await wait();await fill('Default rate before tax','250');await submit();assert(catalog.charges.find(row=>row.name==='Inspection').rate===250,'Charge edit preserves identity and updates its rate')

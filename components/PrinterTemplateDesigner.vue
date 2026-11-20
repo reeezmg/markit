@@ -11,6 +11,14 @@ import { useDesignerHistory } from '~/utils/designer-history';
 import { cachePrintSettings } from '~/utils/load-print-template.client';
 import { downloadTemplatePDF, renderPrintTemplate } from '~/utils/print-template-renderer.client';
 import { usePrint } from '~/composables/usePrintBill';
+import { useDocumentSections } from '~/utils/document-designer-sections';
+import TableProperties from './DocumentDesigner/TableProperties.vue';
+import ColumnWidth from './DocumentDesigner/ColumnWidth.vue';
+import { setColumnPercentage } from '~/utils/document-table';
+import CanvasToolbar from './DocumentDesigner/CanvasToolbar.vue';
+import DesignerTools from './DocumentDesigner/Tools.vue';
+import TextProperties from './DocumentDesigner/TextProperties.vue';
+import type { CustomDocumentSection } from '~/utils/document-designer';
 import PrinterDesignerWorkspace from './PrinterDesignerWorkspace.vue';
 import ThermalReceipt from './ThermalReceipt.vue';
 import { defaultTableColumns, twoLineTableColumns, classicReceiptTemplate, taxlessReceiptTemplate, CLASSIC_RECEIPT_ID } from '~/utils/print-templates';
@@ -104,13 +112,8 @@ function columnPercent(index: number) {
 function setColumnWidth(index: number, percent: number) {
   const columns = element.value?.columns;
   if (!columns || !columns[index] || !Number.isFinite(percent)) return;
-  const others = columns.filter((c, i) => i !== index && (c.line || 1) === (columns[index].line || 1));
-  if (!others.length) { columns[index].width = 100; return; }
-  const width = Math.max(1, Math.min(100 - others.length, percent));
-  const total = others.reduce((sum, c) => sum + c.width, 0);
-  const remaining = 100 - width - others.length;
-  others.forEach(c => { c.width = 1 + remaining * c.width / total; });
-  columns[index].width = width;
+  const line = columns.filter(c => (c.line || 1) === (columns[index].line || 1));
+  setColumnPercentage(line, line.indexOf(columns[index]), percent);
 }
 function moveColumn(index: number, delta: number) {
   const columns = element.value?.columns;
@@ -157,17 +160,10 @@ const resizeHandles = computed<ResizeHandle[]>(() => design.value?.kind === 'rec
 const selectionBounds = computed(() => hitBounds.value.find(b => b.id === elementId.value));
 const showGuides = ref(true);
 const selectedIndex = computed(() => design.value?.elements.findIndex(e => e.id === elementId.value) ?? -1);
-function duplicateElement() {
-  if (!element.value || !design.value || design.value.elements.length >= 40 || busy.value) return;
-  const copy = clone(element.value); copy.id = crypto.randomUUID();
-  design.value.elements.splice(selectedIndex.value + 1, 0, copy); selectElement(copy.id);
-}
-function removeElement() {
-  if (!design.value || !element.value || design.value.elements.length <= 1 || busy.value) return;
-  const index = selectedIndex.value;
-  design.value.elements.splice(index, 1);
-  elementId.value = design.value.elements[Math.min(index, design.value.elements.length - 1)].id;
-}
+const sectionEngine = useDocumentSections({ sections: computed(() => design.value?.elements || []), selectedId: elementId,
+  locked: () => busy.value, limit: 40 });
+function duplicateElement() { sectionEngine.duplicate(); editorTab.value = 'content'; }
+const removeElement = sectionEngine.remove;
 function setZoom(value: number) { if (Number.isFinite(value)) { zoom.value = Math.max(0.25, Math.min(3, value)); fitPreview.value = false; } }
 function wheelZoom(event: WheelEvent) {
   event.preventDefault(); if (stopPointer) return; changeZoom(event.deltaY < 0 ? 0.1 : -0.1);
@@ -346,6 +342,28 @@ function resetLabelLayout() {
   Object.assign(design.value, { width: base.width, height: base.height, fontFamily: base.fontFamily, elements: base.elements });
   elementId.value = base.elements[0].id; fitPreview.value = true;
 }
+const designTemplates = computed(() => [
+  ...(design.value?.kind === 'label' ? [{ value: 'base:label', label: 'Standard product label' }] : [{ value: 'base:tax', label: 'Tax receipt' }, { value: 'base:taxless', label: 'No Tax receipt' }]),
+  ...settings.value.templates.filter(t => t.kind === design.value?.kind && t.id !== design.value?.id).map(t => ({ value: `saved:${t.id}`, label: t.name })),
+]);
+const designPapers = computed(() => [{ value: '', label: 'Custom size' }, ...paperSizes.value.map(size => ({ label: size.label, value: 'height' in size ? `${size.width}x${size.height}` : String(size.width) }))]);
+function applyDesignTemplate(value: string) {
+  if (busy.value || !design.value) return;
+  history.begin();
+  if (value === 'base:label') resetLabelLayout();
+  else if (value === 'base:tax' || value === 'base:taxless') applyClassic(value === 'base:tax' ? 'tax' : 'taxless');
+  else {
+    const source = settings.value.templates.find(t => `saved:${t.id}` === value && t.kind === design.value!.kind);
+    if (source) { const { id, name } = design.value; Object.assign(design.value, clone(source), { id, name }); elementId.value = design.value.elements[0].id; }
+  }
+  fitPreview.value = true; history.end();
+}
+function addCustomSection(section: CustomDocumentSection) {
+  if (busy.value || !design.value || design.value.elements.length >= 40) return;
+  history.begin(); add('text'); Object.assign(element.value!, section);
+  if (design.value.kind === 'label') element.value!.height = Math.min(design.value.height - element.value!.y, 100);
+  editorTab.value = 'content'; history.end();
+}
 function duplicate() {
   if (!design.value) return;
   const copy = clone(design.value); copy.id = crypto.randomUUID(); copy.name = `${copy.name.slice(0, 70)} copy`;
@@ -368,16 +386,12 @@ function add(type: PrintElement['type']) {
   design.value.elements.push(e); elementId.value = e.id;
 }
 function move(index: number, change: number) {
-  const list = design.value!.elements;
-  if (index + change < 0 || index + change >= list.length) return;
-  const [item] = list.splice(index, 1); list.splice(index + change, 0, item);
+  const id = design.value?.elements[index]?.id; if (id) sectionEngine.move(id, change);
 }
 let dragged = '';
 function drop(index: number) {
-  const list = design.value!.elements;
-  const from = list.findIndex(e => e.id === dragged);
-  if (from < 0 || from === index) return;
-  const [item] = list.splice(from, 1); list.splice(index, 0, item); dragged = '';
+  const target = design.value?.elements[index]?.id;
+  if (target) sectionEngine.drop(dragged, target); dragged = '';
 }
 function startMove(event: PointerEvent, id: string, handle?: ResizeHandle) {
   if (design.value?.kind === 'receipt' && design.value.elements.find(e => e.id === id)?.placement !== 'absolute') { startReceiptGesture(event, id, handle); return; }
@@ -595,7 +609,7 @@ function historyShortcut(event: KeyboardEvent) {
             <div class="control-heading"><p v-if="design.kind === 'label'">New labels start with the original label layout. Edit any item in Content.</p><h3>Paper &amp; design</h3><p>{{ design.kind === 'receipt' ? 'Choose a thermal roll or a sheet size such as A4. Sheets print through the system print dialog or PDF.' : 'Set your label size to match the paper in your printer.' }}</p></div>
             <label>Design name<input v-model="design.name" maxlength="80" /></label>
             <label>Typeface<select v-model="design.fontFamily"><option :value="undefined">Standard</option><option value="thermal">Condensed thermal</option></select></label>
-            <label>Standard paper size<select aria-label="Standard paper size" :value="paperPresetValue" @change="setPaperSize(($event.target as HTMLSelectElement).value)"><option value="">Custom size</option><option v-for="size in paperSizes" :key="size.label" :value="'height' in size ? `${size.width}x${size.height}` : String(size.width)">{{ size.label }}</option></select></label>
+            <DesignerTools :templates="designTemplates" :papers="designPapers" :paper="paperPresetValue" :disabled="busy" :limit-reached="design.elements.length >= 40" @template="applyDesignTemplate" @paper="setPaperSize" @section="addCustomSection" />
             <div class="control-grid three-columns">
               <label>Width (mm)<input :value="design.width" @change="setPaperSize(`${Number(($event.target as HTMLInputElement).value)}x${design.height}`)" type="number" min="25" :max="design.paperSize ? 216 : 100" step="1" /></label>
               <label v-if="design.kind === 'label'">Height (mm)<input :value="design.height" @change="setPaperSize(`${design.width}x${Number(($event.target as HTMLInputElement).value)}`)" type="number" min="15" max="150" step="1" /></label>
@@ -607,7 +621,7 @@ function historyShortcut(event: KeyboardEvent) {
           </div>
           <div v-show="editorTab === 'content'" class="content-controls">
             <div class="control-heading"><h3>What goes on your {{ design.kind }}?</h3><p>Select an item below or click it in the preview to edit.</p></div>
-            <div class="add-tools" aria-label="Add content">
+            <DesignerTools :templates="designTemplates" :papers="designPapers" :paper="paperPresetValue" :disabled="busy" :limit-reached="design.elements.length >= 40" @template="applyDesignTemplate" @paper="setPaperSize" @section="addCustomSection" /><div class="add-tools" aria-label="Add content">
               <UButton v-for="type in (design.kind === 'receipt' ? ['text', 'field', 'items', 'taxsummary', 'spacer', 'line', 'barcode', 'qrcode', 'logo'] : ['text', 'field', 'line', 'barcode', 'qrcode', 'logo'])" :key="type" :label="type === 'logo' ? '+ Image' : type === 'items' ? '+ Table' : type === 'field' ? '+ Variable' : type === 'qrcode' ? '+ QR code' : '+ ' + friendlyField(type)" variant="outline" size="sm" :disabled="design.elements.length >= 40" @click="add(type as PrintElement['type'])" />
             </div>
             <div class="content-body">
@@ -636,7 +650,7 @@ function historyShortcut(event: KeyboardEvent) {
                     <label>Row variable<select v-model="column.field"><option :value="column.field">{{ [...receiptTableVariables, ...customVariables].find(v => v.key === column.field)?.label || column.field }}</option><optgroup v-for="group in tableVariableGroups" :key="group.group" :label="group.group"><option v-for="variable in group.variables" :key="variable.key" :value="variable.key">{{ variable.label }}</option></optgroup></select></label>
                     <div class="control-grid">
                       <label>Layout line<select :value="column.line || 1" @change="column.line = Number(($event.target as HTMLSelectElement).value)"><option :value="1">Line 1</option><option :value="2">Line 2</option><option :value="3">Line 3</option></select></label>
-                      <label>Width (%)<input :value="Number(columnPercent(index).toFixed(1))" type="number" min="1" max="100" step="1" @change="setColumnWidth(index, Number(($event.target as HTMLInputElement).value))" /><small>{{ (element.width * columnPercent(index) / 100).toFixed(1) }} mm</small></label>
+                      <ColumnWidth :model-value="columnPercent(index)" :maximum="100 - element.columns.filter(c => (c.line || 1) === (column.line || 1)).length + 1" @update:model-value="setColumnWidth(index, $event)" /><small>{{ (element.width * columnPercent(index) / 100).toFixed(1) }} mm</small>
                       <label>Column alignment<select v-model="column.align"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
                     </div>
                     <label>Text after value<input v-model="column.suffix" maxlength="20" placeholder="e.g. %" /></label>
@@ -644,7 +658,7 @@ function historyShortcut(event: KeyboardEvent) {
                   </div>
                   <UButton label="Add column" :disabled="element.columns.length >= 12" variant="outline" @click="addColumn" />
                   <div class="control-grid">
-                    <label>Cell padding (mm)<input v-model.number="element.tablePadding" type="number" min="0" max="3" step="0.1" /></label>
+                    <TableProperties v-model="element.tableStyle" :defaults="{ cellPadding: element.tablePadding ?? .5, fontSize: element.fontSize, headerFontSize: element.fontSize, borderWidth: .17 }" />
                     <label class="bold-choice"><input v-model="element.tableBorders" type="checkbox" /> Table borders</label>
                     <label>Gap after each item (mm)<input v-model.number="element.tableItemGap" type="number" min="0" max="10" step="0.5" /></label>
                     <label class="bold-choice"><input v-model="element.tableRules" type="checkbox" /> Header and footer rules</label>
@@ -670,7 +684,7 @@ function historyShortcut(event: KeyboardEvent) {
                 <p v-if="element.field" class="variable-note">Sample: {{ fieldValue(design.kind === 'label' ? sampleLabel : receiptData, element.field) || 'No value' }}</p>
                 <p v-if="element.field.startsWith('distributor') || element.field.startsWith('purchaseorder.')" class="variable-note">Uses the supplier linked to this product's purchase order. Blank when no supplier is linked.</p>
               </div>
-              <label v-if="['field', 'text', 'barcode', 'qrcode'].includes(element.type)">{{ element.field ? 'Text before field' : 'Text' }}<textarea v-model="element.text" rows="2" maxlength="2000" placeholder="Enter your text" /></label>
+              <TextProperties v-if="element.type === 'text'" v-model:text="element.text" v-model:heading="element.heading" v-model:border="element.border" :maxlength="2000" /><label v-if="['field', 'barcode', 'qrcode'].includes(element.type)">{{ element.field ? 'Text before field' : 'Text' }}<textarea v-model="element.text" rows="2" maxlength="2000" placeholder="Enter your text" /></label>
               <label v-if="element.type === 'logo'">Image (PNG, JPEG or WebP, up to 10 MB)<input type="file" aria-label="Upload design image" accept="image/png,image/jpeg,image/webp" @change="upload" /></label>
               <label v-if="design.kind === 'receipt' && element.type === 'logo'">Image placement<select :value="element.placement || 'flow'" aria-label="Image placement" @change="element.placement = ($event.target as HTMLSelectElement).value as 'flow' | 'absolute'"><option value="absolute">Anywhere on paper (drag to position)</option><option value="flow">In section order</option></select></label>
               <div v-if="['text', 'field', 'items', 'taxsummary'].includes(element.type)" class="control-grid three-columns">
@@ -705,7 +719,7 @@ function historyShortcut(event: KeyboardEvent) {
         <div v-if="design" class="editor-preview min-w-0">
 
           <p v-if="previewError" role="alert" class="text-red-600 mb-3">{{ previewError }}</p>
-          <div class="canvas-toolbar"><select aria-label="Canvas paper size" :value="paperPresetValue" @change="setPaperSize(($event.target as HTMLSelectElement).value)"><option value="">Custom size</option><option v-for="size in paperSizes" :key="size.label" :value="'height' in size ? `${size.width}x${size.height}` : String(size.width)">{{ size.label }}</option></select><select v-if="design.kind === 'label'" v-model="labelPreviewMode" aria-label="Sample discount scenario" style="width: 150px"><option value="current">Sample data</option><option value="discount">With discount</option><option value="no-discount">Without discount</option></select><span role="status">{{ rendering ? 'Updating...' : 'Canvas' }}</span><div><button type="button" class="fit-button" :aria-pressed="fitPreview" @click="fitPreview = true">{{ design.kind === 'receipt' ? 'Fit width' : 'Fit' }}</button><button type="button" aria-label="Zoom out" :disabled="previewZoom <= 0.25" @click="changeZoom(-0.25)">−</button><select aria-label="Preview zoom" :value="Math.round(previewZoom * 100)" @change="setZoom(Number(($event.target as HTMLSelectElement).value) / 100)"><option v-if="![25,50,75,100,150,200,300].includes(Math.round(previewZoom * 100))" :value="Math.round(previewZoom * 100)">{{ Math.round(previewZoom * 100) }}%</option><option v-for="level in [25,50,75,100,150,200,300]" :key="level" :value="level">{{ level }}%</option></select><button type="button" aria-label="Zoom in" :disabled="previewZoom >= 3" @click="changeZoom(0.25)">+</button></div></div>
+          <div class="canvas-toolbar"><CanvasToolbar :zoom="Math.round(previewZoom * 100)" :fitted="fitPreview" :disabled="busy" @zoom="setZoom($event / 100)" @fit="fitPreview = true"><select aria-label="Canvas paper size" :value="paperPresetValue" @change="setPaperSize(($event.target as HTMLSelectElement).value)"><option value="">Custom size</option><option v-for="size in paperSizes" :key="size.label" :value="'height' in size ? `${size.width}x${size.height}` : String(size.width)">{{ size.label }}</option></select><select v-if="design.kind === 'label'" v-model="labelPreviewMode" aria-label="Sample discount scenario" style="width: 150px"><option value="current">Sample data</option><option value="discount">With discount</option><option value="no-discount">Without discount</option></select><span role="status">{{ rendering ? 'Updating...' : 'Canvas' }}</span></CanvasToolbar></div>
           <div class="selection-toolbar" aria-label="Selected section actions">
             <template v-if="element"><strong>{{ elementName(element) }}</strong><button type="button" :disabled="busy || selectedIndex === 0" @click="move(selectedIndex, -1)" aria-label="Move selected item up">&uarr;</button><button type="button" :disabled="busy || selectedIndex === design.elements.length - 1" @click="move(selectedIndex, 1)" aria-label="Move selected item down">&darr;</button><button type="button" :disabled="busy || design.elements.length >= 40" @click="duplicateElement">Duplicate item</button><button type="button" :disabled="busy || design.elements.length <= 1" @click="removeElement">Delete item</button></template>
             <template v-if="element"><button v-for="alignment in (['left', 'center', 'right'] as const)" :key="alignment" type="button" :disabled="busy" :aria-label="`Align box ${alignment}`" @click="alignBox(alignment)">{{ alignment }}</button></template>

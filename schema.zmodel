@@ -877,6 +877,10 @@ model GeneralPreference extends Base {
     // table columns and typography), notes/terms, accepted-edit policy, approval/conversion
     // invoice due days and retainCustomerNotes/retainTermsAndConditions conversion
     // choices as versioned JSON. No new database fields are required.
+    // Document editor JSON also supports optional A4/A5/Letter quote paperSize,
+    // shared tableStyle geometry/typography and quote product image dimensions.
+    // text section borders and print-template first-line headings/borders.
+    // Shared editor tools preserve legacy defaults; no database fields or DDL.
     // Optional professional layout, live item thumbnails, paired text columns,
     // text headings and field sign-off/contact roles reuse the same section kinds
     // and columns. Company branding/addresses and item photos are read live from

@@ -4,6 +4,7 @@
     "type": "module",
     "version": "0.0.1-prealpha.1",
     "scripts": {
+        "test:document-designer": "tsx --test tests/document-designer.test.ts",
         "test:connect-whatsapp": "vue-tsc -p tests/tsconfig.connect-whatsapp.json && tsx --test --test-concurrency=1 tests/connect-whatsapp.test.ts && node tests/run-connect-whatsapp-browser.mjs",
         "dev": "nuxt dev",
         "dev:web": "nuxt dev --port 3000",

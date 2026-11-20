@@ -91,6 +91,19 @@ Embedded client context reads company-owned invoices, quotes, ecommerce orders, 
 
 Email and WhatsApp activities are conversation logs, not mailbox synchronization or outbound sends. HTTPS references are links rather than binary uploads. Manual WhatsApp links and Connect permission controls remain available. CRM changes never grant consent. The CRM Campaigns page is retired. Underlying campaign API support and existing marketing data remain intact; saved CRM segments are not campaign recipient audiences.
 
+## Sales funnel
+
+`pages/crm/funnel.vue` opens `CRMWorkspace` with section `funnel`. The sidebar and
+workspace restrict it to administrators/managers, matching the existing reports API.
+`components/CRM/Funnel.vue` reuses `/api/crm/reports` pipeline aggregates, with a
+pipeline selector and deal-created date filters. Configured stages remain in order,
+including zero-count stages; unmatched historical stages appear as previous stages.
+Bars show current-stage counts, share, value and average stage age. Summary cards
+show total/open/won/lost counts and won / (won + lost) win rate, with no rate for
+zero closed deals. This is explicitly a current-state snapshot, not historical
+stage conversion or collected revenue. Archived open deals are excluded by the
+existing reports query; closed outcomes remain included. No schema changes.
+
 ## Verification and deployment
 
 `tests/crm.test.ts` uses an isolated DML adapter for membership metadata, company boundaries, client identity preservation, versioning, import, deals, tasks, reminders and real HTTP guards. `tests/run-crm-browser.mjs` mounts real CRM components and ClientPanel with mocked APIs at desktop/mobile sizes. Existing client page/sidebar compilation is checked separately.

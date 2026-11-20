@@ -280,3 +280,12 @@ Product add, purchase and edit label payloads carry the saved item ID and the fo
 Product-list Date cells use the explicit en-IN locale and Asia/Kolkata timezone. Ambient Node/browser locale settings must not change the hydrated cell text.
 
 Product-label barcode resolution accepts both flat `barcode` and enriched `item.barcode`. If a configured item-barcode element has no value but a saved item ID exists, label-variable loading looks up the barcode within that company, even for a flat-only design. Missing barcode values reject the job before transmission instead of silently omitting the symbol. Barcode errors do not trigger the native TSPL fallback. Legacy TSPL labels measure CODE128 modules and reduce bar width to fit a 50 mm label with quiet zones, rather than always using three-dot bars.
+
+Product collection quick creation: `components/AddProduct/Create.vue` offers Create
+in the Collection selector's unmatched-search slot, matching brand/category behavior.
+`QuickCreateCollectionModal.vue` prefills the searched name and saves name/description
+through the existing Collection hook with the active form company, live status and
+all audiences. On success the product form selects the returned collection and
+restores focus; cancel and errors preserve the product draft. Coverage plans use
+`AfterSales/ProductSelector.vue` and its shared-rules quick-create modal (see
+ARCH-after-sales.md). Existing collection management and coverage links remain.

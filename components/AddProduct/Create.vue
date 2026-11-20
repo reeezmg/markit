@@ -194,13 +194,17 @@ const dimensionSelectRef = ref<any>(null)
 // One wrapper per SELECT-type custom field (v-for template ref → array).
 const customSelectRefs = ref<HTMLElement[]>([])
 
+const showCollectionModal = ref(false)
+const pendingCollectionName = ref('')
+const openCreateCollectionModal = (query: string) => { collectionSelectRef.value?.querySelector('button[aria-expanded="true"]')?.click(); pendingCollectionName.value = query.trim(); activeQuickCreateSelect.value = 'collection'; showCollectionModal.value = true }
+watch(showCollectionModal, open => { if (!open && activeQuickCreateSelect.value === 'collection') { focusSelectTrigger(collectionSelectRef); activeQuickCreateSelect.value = null } })
 const showBrandModal = ref(false)
 const showCategoryModal = ref(false)
 const showSubcategoryModal = ref(false)
 const pendingBrandName = ref('')
 const pendingCategoryName = ref('')
 const pendingSubcategoryName = ref('')
-const activeQuickCreateSelect = ref<'brand' | 'category' | 'subcategory' | null>(null)
+const activeQuickCreateSelect = ref<'brand' | 'category' | 'subcategory' | 'collection' | null>(null)
 
 // Each select is wrapped in <div ref="..."> so the parent can close an open
 // menu via wrapper.querySelector('button').focus()/click() — see
@@ -650,6 +654,9 @@ watch(isServiceProduct, emitUpdate)
           />
           <span class="truncate">{{ collection.name }}</span>
         </template>
+        <template #option-empty="{ query }">
+          <UButton size="xs" variant="ghost" block icon="i-heroicons-plus" :label="`Create '${query}'`" :disabled="!query?.trim()" @pointerdown.prevent.stop @mousedown.prevent.stop @click.prevent.stop="openCreateCollectionModal(query)"/>
+        </template>
       </USelectMenu>
       </div>
     </UFormGroup>
@@ -744,6 +751,8 @@ watch(isServiceProduct, emitUpdate)
       />
     </UFormGroup>
   </div>
+
+  <AddProductQuickCreateCollectionModal v-model="showCollectionModal" :preset-name="pendingCollectionName" @created="value => collectionSelectedRow = value"/>
 
   <AddProductQuickCreateBrandModal
     v-model="showBrandModal"

@@ -29,7 +29,7 @@ test('Menus retain existing plan, workflow and staff gates regardless of selecte
   for(const plan of ['free','lite','pro'])for(const role of ['admin','manager','user','biller','accountant','investor']){
     const actor={...session,plan,role,type:role};
     assert.equal(paths('connect',undefined,actor).length>0,['admin','manager'].includes(role));
-    const crm=paths('crm',undefined,actor);assert.equal(crm.includes('/crm/settings'),['admin','manager'].includes(role));assert.equal(crm.length>0,role!=='investor');
+    const crm=paths('crm',undefined,actor);assert.equal(crm.includes('/crm/funnel'),['admin','manager'].includes(role));assert.equal(crm.includes('/crm/settings'),['admin','manager'].includes(role));assert.equal(crm.length>0,role!=='investor');
     assert(!crm.includes('/crm/leads'),'CRM must not expose a duplicate lead directory');
     assert(!crm.includes('/crm/accounts'),'Business accounts must not have a separate navigation page');
     assert(!crm.includes('/crm/campaigns'),'Campaigns must not have a CRM navigation page');

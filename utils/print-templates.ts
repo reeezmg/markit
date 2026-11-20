@@ -2,6 +2,7 @@ import { labelBarcode } from './label-barcode';
 import { z } from 'zod';
 import { labelVariables, nestedLabelValue } from './label-variables';
 import { receiptSummary } from './receipt-summary';
+import { documentTableStyleSchema } from './document-table';
 export const STANDARD_LABEL_ID = 'builtin:standard-product-label';
 export const NO_TAX_RECEIPT_ID = 'builtin:no-tax-receipt';
 export const CLASSIC_RECEIPT_ID = 'builtin:classic-tax-receipt';
@@ -30,6 +31,7 @@ export const elementSchema = z.object({
   id: z.string().min(1).max(80),
   type: z.enum(['text', 'field', 'items', 'line', 'barcode', 'qrcode', 'logo', 'taxsummary', 'spacer']),
   text: z.string().max(2000).default(''),
+  heading: z.boolean().optional(), border: z.boolean().optional(),
   field: z.string().max(100).default(''),
   x: z.number().min(0).max(297), y: z.number().min(0).max(1400),
   width: z.number().min(2).max(297), height: z.number().min(2).max(297),
@@ -40,6 +42,7 @@ export const elementSchema = z.object({
   columns: z.array(tableColumnSchema).min(1).max(12).optional(),
   tableBorders: z.boolean().optional(),
   tablePadding: z.number().min(0).max(3).optional(),
+  tableStyle: documentTableStyleSchema.optional(),
   tableItemGap: z.number().min(0).max(10).optional(),
   tableHeaderBold: z.boolean().optional(),
   tableRules: z.boolean().optional(),

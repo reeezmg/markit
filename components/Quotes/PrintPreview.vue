@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import QuoteDocument from '~/components/Quotes/Document.vue'
+import { sheetDimensions } from '~/utils/document-designer'
 import { defaultQuoteDesign } from '~/utils/quote-design'
 const props = defineProps<{ quote: any; company: any; inline?: boolean; documentTitle?: string }>()
 const emit = defineEmits<{ close: [] }>()
-useHead(() => ({ style: [{ key: 'quote-page-margins', textContent: `@page { size: A4; margin: ${props.quote.documentDesign?.padding ?? defaultQuoteDesign().padding}mm; }` }] }))
+useHead(() => ({ style: [{ key: 'quote-page-margins', textContent: `@page { size: ${sheetDimensions(props.quote.documentDesign?.paperSize).value}; margin: ${props.quote.documentDesign?.padding ?? defaultQuoteDesign().padding}mm; }` }] }))
 const print = () => window.print()
 function keydown(event: KeyboardEvent) { if (!props.inline && event.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', keydown))

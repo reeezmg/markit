@@ -104,6 +104,19 @@ Not read — assumed to be a Nuxt UI starter template stub (triggered by `isHelp
 
 ## Print / Barcode Components
 
+### Shared document designer
+`PrinterDesignerWorkspace.vue` supplies the focus-contained fullscreen shell for quotes,
+sales orders, labels and receipts. `DocumentDesigner/Tools.vue` owns template application,
+paper presets and the custom-section form; `TableProperties.vue` and `ColumnWidth.vue` share table geometry and column sizing;
+`TextProperties.vue` edits heading/list/border
+content; `CanvasToolbar.vue` owns zoom presets/buttons and fit. Adapters supply validated
+templates, supported paper choices and live data. `utils/document-designer-sections.ts`
+centralizes reorder/deep-copy/delete with per-document limits/protected sections;
+`designer-history.ts` groups local undo transactions. Renderers remain document-specific
+to preserve flowing quote tables and fixed/thermal printer geometry. Stored data stays
+in the existing company preference JSON; no executable HTML is accepted.
+
+
 ### `ThermalReceipt.vue`
 Invoice-mode data includes its due date, terms, Subject and receipt-derived
 received/balance values. `invoiceDocumentLines` adds these to original HTML/PDF

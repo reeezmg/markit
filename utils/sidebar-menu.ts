@@ -1097,7 +1097,7 @@ export function buildSidebarMenu(section: SidebarSection, session: Record<string
 
   if (section === 'crm') {
     if (!crmStaff(session.role || '')) return []
-    return crmPages.filter(([page]) => !['reports','settings','campaigns'].includes(page) || crmManager(session.role || '')).map(([path,label,icon]) => ({id:'crm-'+(path||'overview'),label,icon,to:path==='clients'?'/client?from=crm':'/crm'+(path?'/'+path:''),exact:!path}))
+    return crmPages.filter(([page]) => !['reports','funnel','settings','campaigns'].includes(page) || crmManager(session.role || '')).map(([path,label,icon]) => ({id:'crm-'+(path||'overview'),label,icon,to:path==='clients'?'/client?from=crm':'/crm'+(path?'/'+path:''),exact:!path}))
   }
   if (section === 'connect') {
     return [{ id: 'connect-whatsapp', label: 'WhatsApp Business', to: '/connect/whatsapp', icon: 'i-heroicons-chat-bubble-left-right' }]

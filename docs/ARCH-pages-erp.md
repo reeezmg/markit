@@ -749,18 +749,40 @@ unchanged. Invoice email reads notes/terms from the issued Bill rather than copy
 unselected text from the original quote. Preferences use existing JSON storage and
 conversion uses existing Bill text columns; no schema migration runs.
 
-There is one company A4 quote design, stored as `documentDesign` in the same JSON.
-The Classic/Modern/Compact cards and editor template selector are removed; existing
+There is one active company quote design, stored as `documentDesign` in the same JSON.
+The editor offers Standard business, Professional proposal and Compact starter templates.
+Applying one replaces only the local layout and supports Undo; Save persists it. Existing
 `pdf_template` values remain readable for API compatibility but do not select a layout.
 Preference > Design quote opens `Quotes/DesignEditor.vue` using the receipt designer's
 `PrinterDesignerWorkspace` and `useDesignerHistory`. The workspace includes a live
-A4 preview, zoom, page margins/font/accent, ordered draggable sections and arrow
+A4/A5/Letter preview and matching print size (legacy default A4), zoom, page margins/font/accent, ordered draggable sections and arrow
 reordering, custom text/live fields/dividers, header/footer/logo image uploads,
 image width/height/alignment, section spacing/visibility and table headings, relative
 widths, ordering, borders and padding. Undo/redo and keyboard shortcuts operate on the
 local draft; Done retains it in the open preference drawer. Save design persists all
 current preference changes through the same validated/authorized PUT; failure retains
 the draft and displays the error. Cancel/closing the drawer discards unsaved changes.
+
+Quote, sales-order, receipt and label adapters share `DocumentDesigner/Tools.vue`,
+`TextProperties.vue`, `CanvasToolbar.vue`, `useDocumentSections` and draft history.
+Shared tools offer template application, page presets, custom sections with an optional
+first-line heading, plain/bulleted/numbered text and borders. Sections use escaped text,
+never HTML. Document-specific bindings/renderers retain quote totals and printer limits.
+Reorder/duplicate/delete share guards; quote items/totals cannot be removed or copied.
+
+Table selection exposes shared `DocumentDesigner/TableProperties.vue` and
+`ColumnWidth.vue` controls and scrolls the properties panel to table settings.
+Optional `tableStyle` JSON configures minimum body/header
+heights (mm), cell padding (mm), body/header type sizes (pt), vertical alignment and
+border thickness (mm). Quote product images support independent width/height (5–80 mm),
+contain/cover and beside/above placement. Image boxes shrink into narrow columns and
+text wraps below when necessary. Table section width is a percentage; alignment uses
+the section alignment. Headers allow line breaks. Visible column widths are displayed
+as percentages with sliders/numeric inputs and are normalized without changing hidden
+columns. Header dividers support pointer dragging/cancellation and arrow-key resizing
+(Shift increases the step). A gesture is one undo step; it changes presentation only.
+Rows grow beyond their minimum to fit content. Preview/print use the same settings;
+legacy designs without `tableStyle` retain their previous layout.
 
 Page setup also supports an optional **Professional proposal** layout and live item
 thumbnails within material descriptions. Standard designs retain their existing
@@ -787,13 +809,13 @@ PNG/JPEG data URLs and CDN object keys, rejecting executable/credentialed URLs.
 `utils/quote-design.ts` allowlists content and fields, limits 30 sections and 7 columns,
 requires one visible item table/totals and visible item name/amount columns, validates
 PNG/JPEG data URLs (350 KB encoded per image, 1.5 MB design total) and rejects remote/SVG
-images. The upload UI accepts PNG/JPEG/WebP files up to 10 MB, checks image signatures, and resizes/compresses them through the shared designer image helper before storage. Images can remain in section order or use absolute A4 x/y coordinates with direct canvas dragging. Independent images do not move quote content; print compensates page margins to retain physical placement. No raw HTML or
+images. The upload UI accepts PNG/JPEG/WebP files up to 10 MB, checks image signatures, and resizes/compresses them through the shared designer image helper before storage. Images can remain in section order or use absolute x/y coordinates bounded to the selected sheet with direct canvas dragging. Independent images do not move quote content; print compensates page margins to retain physical placement. No raw HTML or
 executable expressions are stored. `Quotes/Document.vue` renders the same live design
 in the designer, `PrintPreview.vue` browser print/Save PDF, draft review and public
 customer page. Detail/public reads return the current authorized company design;
 changing it updates presentation of saved quotes without changing document amounts.
 The source writer and invoice conversion snapshots do not embed large design images.
-Browser PDF output uses A4 with the saved margins and repeating table headings.
+Browser PDF output uses the selected A4/A5/Letter size with saved margins and repeating table headings.
 Issued-invoice emails keep their existing invoice PDF renderer.
 Accepted-edit and customer-response policies apply to existing quotes too.
 

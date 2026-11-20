@@ -52,7 +52,7 @@ async function save() {
         <UButton v-if="error && !canManage" color="gray" @click="load">Retry</UButton>
         <p v-if="!loading && !error && !canManage" class="text-sm text-gray-500">Administrators, managers and accountants can change these preferences.</p>
         <fieldset v-if="!loading && !error || canManage" :disabled="saving || !canManage" class="space-y-6">
-          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"><h3 class="font-medium">{{ documentTitle }} design</h3><p class="mb-3 mt-1 text-sm text-gray-500">Customize your A4 {{ documentName }} with header and footer images, text, live fields and table columns.</p><UButton color="gray" icon="i-heroicons-paint-brush" @click="designOpen = true">Design {{ documentName }}</UButton></div>
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"><h3 class="font-medium">{{ documentTitle }} design</h3><p class="mb-3 mt-1 text-sm text-gray-500">Customize your {{ documentName }} with header and footer images, text, live fields and table columns.</p><UButton color="gray" icon="i-heroicons-paint-brush" @click="designOpen = true">Design {{ documentName }}</UButton></div>
           <div class="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800">
             <UCheckbox v-model="draft.allowAcceptedEdits" :label="isSalesOrder ? 'Allow editing of closed or cancelled sales orders' : 'Allow editing of accepted quotes'" aria-label="Allow editing accepted quotes" />
             <UCheckbox v-if="!isSalesOrder" v-model="draft.allowCustomerApproval" label="Allow customers to accept or decline quotes through a public link or WhatsApp" aria-label="Allow customer quote approval" />

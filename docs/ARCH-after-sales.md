@@ -438,3 +438,12 @@ transaction, checking detail collections, date-only reading values, newest-first
 and rejection of another company. Run just this check with `tsx --tsconfig
 tests/tsconfig.after-sales.json --test --test-name-pattern="customer-product detail reads"
 tests/after-sales.integration.test.ts`; it skips when tables or registered units are absent.
+
+Product plan quick creation: `AfterSales/ProductSelector.vue` shows Create for an
+unmatched search. `QuickCreatePlan.vue` opens a prefilled modal with a plan-kind
+selector and the shared RulesEditor, saves through the existing company-scoped
+configuration endpoint, and selects the new ID while preserving existing selections.
+The create response contains ID/revision metadata; the selector combines it with the
+submitted name/kind/rules for immediate display. Cancel performs no write; failed
+saves keep the editor open. Company changes dismiss the editor and stale responses
+cannot update the new company's selection. No schema changes are required.

@@ -101,9 +101,16 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
       const value = element.type === 'field' && element.field ? fieldValue(data, element.field) : element.text;
       const text = element.type === 'field' && element.field ? (value ? element.text + value : '') : value;
       if (!text && template.kind === 'receipt') continue;
-      const height = drawText(text, x, y, w, font, element.bold, element.align, element.inverse, elementIsStruck(element, data));
+      const inset = element.border ? scale : 0;
+      let height: number;
+      if (element.type === 'text' && element.heading) {
+        const [title, ...body] = text.split('\n');
+        const titleHeight = drawText(title, x + inset, y + inset, w - inset * 2, font, true, element.align, element.inverse);
+        height = titleHeight + (body.length ? drawText(body.join('\n'), x + inset, y + inset + titleHeight, w - inset * 2, font, element.bold, element.align, element.inverse) : 0) + inset * 2;
+      } else height = drawText(text, x + inset, y + inset, w - inset * 2, font, element.bold, element.align, element.inverse, elementIsStruck(element, data)) + inset * 2;
       if (template.kind === 'label' && height > h + 1) throw new Error('Text exceeds its label box. Increase the box height or reduce the font size.');
       used = Math.max(h, height);
+      if (element.border) { ctx.save(); ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(1, scale / 5); ctx.strokeRect(x, y, w, used); ctx.restore(); }
     } else if (element.type === 'line') {
       ctx.fillRect(x, y + h / 2, w, Math.max(1, scale / 5));
       if (element.doubleLine) ctx.fillRect(x, y + h / 2 + scale * 0.5, w, Math.max(1, scale / 5));
@@ -146,7 +153,8 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
       rule(true); used = Math.max(h, rowY - y);
     } else if (element.type === 'items' && element.columns) {
       const lines = tableColumnLines(element.columns);
-      const padding = (element.tablePadding ?? 0.5) * scale;
+      const style = element.tableStyle;
+      const padding = (style?.cellPadding ?? element.tablePadding ?? 0.5) * scale;
       let rowY = y;
       const rule = () => {
         if (element.tableDashedRules) {
@@ -155,18 +163,22 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
         rowY += scale * 2;
       };
       const drawRow = (columns: typeof element.columns, values: string[], header: boolean) => {
+        const rowFont = (header ? style?.headerFontSize ?? style?.fontSize : style?.fontSize) === undefined ? font : (header ? style?.headerFontSize ?? style?.fontSize : style?.fontSize)! * Number(template.dpi) / 72;
         const total = columns.reduce((sum, column) => sum + column.width, 0);
         const widths = columns.map(column => w * column.width / total);
-        if (widths.some(width => width <= padding * 2 + font * 0.6 * squeeze)) throw new Error('A table column is too narrow. Increase its width, reduce padding or reduce text size.');
+        if (widths.some(width => width <= padding * 2 + rowFont * 0.6 * squeeze)) throw new Error('A table column is too narrow. Increase its width, reduce padding or reduce text size.');
         const bold = header ? element.tableHeaderBold !== false : element.bold;
-        setFont(font, bold);
-        const rowHeight = Math.max(...values.map((value, i) => wrap(value, (widths[i] - padding * 2) / squeeze).length * font * leading)) + padding * 2;
+        setFont(rowFont, bold);
+        const textHeights = values.map((value, i) => wrap(value, (widths[i] - padding * 2) / squeeze).length * rowFont * leading);
+        const rowHeight = Math.max((header ? style?.headerHeight ?? 0 : style?.rowHeight ?? 0) * scale, Math.max(...textHeights) + padding * 2);
         ensureCanvasHeight(rowY + rowHeight + 2 * scale);
         if (rowY + rowHeight > 15000) throw new Error('Receipt is too long to render. Reduce the number of items.');
         let columnX = x;
         values.forEach((value, i) => {
-          drawText(value, columnX + padding, rowY + padding, widths[i] - padding * 2, font, bold, columns[i].align);
-          if (element.tableBorders !== false) { ctx.lineWidth = Math.max(1, scale / 6); ctx.strokeRect(columnX, rowY, widths[i], rowHeight); }
+          const extra = rowHeight - textHeights[i] - padding * 2;
+          const offset = style?.verticalAlign === 'middle' ? extra / 2 : style?.verticalAlign === 'bottom' ? extra : 0;
+          drawText(value, columnX + padding, rowY + padding + offset, widths[i] - padding * 2, rowFont, bold, columns[i].align);
+          if (element.tableBorders !== false) { ctx.lineWidth = style?.borderWidth ? style.borderWidth * scale : Math.max(1, scale / 6); ctx.strokeRect(columnX, rowY, widths[i], rowHeight); }
           columnX += widths[i];
         });
         rowY += rowHeight;

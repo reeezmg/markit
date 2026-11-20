@@ -1,7 +1,7 @@
 export const crmPages = [
   ['','Overview','i-heroicons-squares-2x2'],
   ['clients','Clients / leads','i-heroicons-users'],
-  ['deals','Deals and pipeline','i-heroicons-view-columns'],['activities','Tasks and activities','i-heroicons-check-circle'],
+  ['deals','Deals and pipeline','i-heroicons-view-columns'],['funnel','Sales funnel','i-heroicons-funnel'],['activities','Tasks and activities','i-heroicons-check-circle'],
   ['calendar','Calendar','i-heroicons-calendar-days'],['segments','Segments','i-heroicons-funnel'],
   ['reports','Reports','i-heroicons-chart-bar'],
   ['settings','CRM settings','i-heroicons-cog-6-tooth'],

@@ -28,43 +28,43 @@ Code references are direct source-text or ORM-accessor matches in Storetools, th
 | `OrderStatus` | `PENDING`, `CONFIRMED`, `PACKED`, `DELIVERED`, `CANCELED`, `OUTOFSTOCK`, `BOOKED` | `schema.zmodel:399` |
 | `TaxType` | `FIXED`, `VARIABLE` | `schema.zmodel:409` |
 | `PayableStatus` | `PENDING`, `PARTIALLY_PAID`, `PAID`, `CANCELLED` | `schema.zmodel:414` |
-| `CouponType` | `PERCENTAGE`, `FLAT`, `GIFT` | `schema.zmodel:1595` |
-| `CouponTarget` | `ALL`, `CATEGORY`, `PRODUCT` | `schema.zmodel:1601` |
-| `CouponAudience` | `ALL`, `GENERATE`, `SPECIFIC`, `PRIVATE` | `schema.zmodel:1607` |
-| `EcommGalleryType` | `PHOTO`, `VIDEO`, `YOUTUBE` | `schema.zmodel:2320` |
-| `NotificationType` | `ORDER_RECEIVED`, `BILL_CREATED`, `PAYMENT_RECEIVED`, `EXPENSE_CREATED`, `INVENTORY_LOW`, `SHIPMENT_SENT`, `SYSTEM_ALERT` | `schema.zmodel:3304` |
-| `PartyType` | `CUSTOMER`, `SUPPLIER`, `EMPLOYEE`, `OWNER`, `OTHER` | `schema.zmodel:3403` |
-| `TransactionDirection` | `GIVEN`, `RECEIVED` | `schema.zmodel:3411` |
-| `TransactionStatus` | `PENDING`, `PAID` | `schema.zmodel:3416` |
-| `AccountLedgerAccountType` | `CASH`, `PRIMARY_BANK`, `BANK`, `INVESTMENT`, `CREDIT` | `schema.zmodel:3421` |
-| `AccountLedgerDirection` | `DEBIT`, `CREDIT` | `schema.zmodel:3429` |
-| `AccountLedgerSourceType` | `OPENING`, `BILL`, `EXPENSE`, `DISTRIBUTOR_PAYMENT`, `MONEY_TRANSACTION`, `ACCOUNT_TRANSFER`, `INVESTMENT`, `SALARY_PAYMENT`, `USER_CREDIT` | `schema.zmodel:3434` |
-| `InvestmentDirection` | `IN`, `OUT` | `schema.zmodel:3499` |
-| `InvestmentStatus` | `PENDING`, `COMPLETED` | `schema.zmodel:3504` |
-| `AccountType` | `CASH`, `BANK`, `INVESTMENT` | `schema.zmodel:3583` |
-| `PunchType` | `CHECK_IN`, `CHECK_OUT` | `schema.zmodel:3908` |
-| `AttendanceStatus` | `PRESENT`, `ABSENT`, `HALF_DAY`, `LEAVE`, `HOLIDAY` | `schema.zmodel:3913` |
-| `AdjustmentStatus` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `schema.zmodel:3921` |
-| `LeaveType` | `CASUAL`, `SICK`, `EARNED`, `OTHER`, `COMP_OFF` | `schema.zmodel:3928` |
-| `LeaveStatus` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `schema.zmodel:3936` |
-| `LeaveAllowancePeriod` | `WEEKLY`, `MONTHLY`, `YEARLY` | `schema.zmodel:3943` |
-| `SalaryPeriod` | `MONTHLY`, `WEEKLY`, `DAILY`, `HOURLY` | `schema.zmodel:4149` |
-| `OvertimeMode` | `NONE`, `HOURLY`, `DAILY` | `schema.zmodel:4156` |
-| `PayrollCycleStatus` | `DRAFT`, `CALCULATED`, `PAID` | `schema.zmodel:4162` |
-| `SalaryPaymentType` | `SALARY`, `CREDIT`, `ADVANCE` | `schema.zmodel:4168` |
-| `UserCreditTxnType` | `CREDIT`, `PAYMENT` | `schema.zmodel:4174` |
-| `UserCreditSourceType` | `MANUAL`, `BILL`, `PAYROLL` | `schema.zmodel:4179` |
-| `UserLedgerEntryType` | `OPENING`, `PAYROLL_ACCRUAL`, `SALARY_PAYMENT`, `USER_CREDIT_BILL`, `CREDIT_BILL_PAYMENT`, `ADJUSTMENT` | `schema.zmodel:4185` |
-| `UserLedgerDirection` | `DEBIT`, `CREDIT` | `schema.zmodel:4194` |
-| `UserLedgerSourceType` | `MANUAL`, `OPENING`, `PAYROLL_CYCLE`, `PAYROLL_LINE`, `SALARY_PAYMENT`, `BILL`, `PAYROLL`, `ADJUSTMENT` | `schema.zmodel:4199` |
-| `AdjustmentKind` | `ADDITION`, `DEDUCTION` | `schema.zmodel:4210` |
-| `PayrollAdjustmentStatus` | `PENDING`, `PROCESSED`, `CANCELLED` | `schema.zmodel:4215` |
-| `ClientCreditType` | `ISSUE`, `REDEEM`, `ADJUST`, `REFUND`, `EXPIRE` | `schema.zmodel:4385` |
-| `AccountantAccountingAccountCategory` | `ASSET`, `LIABILITY`, `EQUITY`, `INCOME`, `EXPENSE` | `schema.zmodel:4728` |
-| `AccountantAccountingAccountType` | `OTHER_ASSET`, `OTHER_CURRENT_ASSET`, `CASH`, `BANK`, `FIXED_ASSET`, `ACCOUNTS_RECEIVABLE`, `STOCK`, `PAYMENT_CLEARING_ACCOUNT`, `INTANGIBLE_ASSET`, `NON_CURRENT_ASSET`, `DEFERRED_TAX_ASSET`, `OTHER_CURRENT_LIABILITY`, `CREDIT_CARD`, `NON_CURRENT_LIABILITY`, `OTHER_LIABILITY`, `ACCOUNTS_PAYABLE`, `OVERSEAS_TAX_PAYABLE`, `DEFERRED_TAX_LIABILITY`, `EQUITY`, `INCOME`, `OTHER_INCOME`, `EXPENSE`, `COST_OF_GOODS_SOLD`, `OTHER_EXPENSE` | `schema.zmodel:4736` |
-| `AccountantManualJournalStatus` | `DRAFT`, `PUBLISHED` | `schema.zmodel:4763` |
-| `AccountantManualJournalType` | `BOTH`, `CASH`, `ACCRUAL` | `schema.zmodel:4768` |
-| `AccountantJournalEntrySide` | `DEBIT`, `CREDIT` | `schema.zmodel:4774` |
+| `CouponType` | `PERCENTAGE`, `FLAT`, `GIFT` | `schema.zmodel:1599` |
+| `CouponTarget` | `ALL`, `CATEGORY`, `PRODUCT` | `schema.zmodel:1605` |
+| `CouponAudience` | `ALL`, `GENERATE`, `SPECIFIC`, `PRIVATE` | `schema.zmodel:1611` |
+| `EcommGalleryType` | `PHOTO`, `VIDEO`, `YOUTUBE` | `schema.zmodel:2324` |
+| `NotificationType` | `ORDER_RECEIVED`, `BILL_CREATED`, `PAYMENT_RECEIVED`, `EXPENSE_CREATED`, `INVENTORY_LOW`, `SHIPMENT_SENT`, `SYSTEM_ALERT` | `schema.zmodel:3308` |
+| `PartyType` | `CUSTOMER`, `SUPPLIER`, `EMPLOYEE`, `OWNER`, `OTHER` | `schema.zmodel:3407` |
+| `TransactionDirection` | `GIVEN`, `RECEIVED` | `schema.zmodel:3415` |
+| `TransactionStatus` | `PENDING`, `PAID` | `schema.zmodel:3420` |
+| `AccountLedgerAccountType` | `CASH`, `PRIMARY_BANK`, `BANK`, `INVESTMENT`, `CREDIT` | `schema.zmodel:3425` |
+| `AccountLedgerDirection` | `DEBIT`, `CREDIT` | `schema.zmodel:3433` |
+| `AccountLedgerSourceType` | `OPENING`, `BILL`, `EXPENSE`, `DISTRIBUTOR_PAYMENT`, `MONEY_TRANSACTION`, `ACCOUNT_TRANSFER`, `INVESTMENT`, `SALARY_PAYMENT`, `USER_CREDIT` | `schema.zmodel:3438` |
+| `InvestmentDirection` | `IN`, `OUT` | `schema.zmodel:3503` |
+| `InvestmentStatus` | `PENDING`, `COMPLETED` | `schema.zmodel:3508` |
+| `AccountType` | `CASH`, `BANK`, `INVESTMENT` | `schema.zmodel:3587` |
+| `PunchType` | `CHECK_IN`, `CHECK_OUT` | `schema.zmodel:3912` |
+| `AttendanceStatus` | `PRESENT`, `ABSENT`, `HALF_DAY`, `LEAVE`, `HOLIDAY` | `schema.zmodel:3917` |
+| `AdjustmentStatus` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `schema.zmodel:3925` |
+| `LeaveType` | `CASUAL`, `SICK`, `EARNED`, `OTHER`, `COMP_OFF` | `schema.zmodel:3932` |
+| `LeaveStatus` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `schema.zmodel:3940` |
+| `LeaveAllowancePeriod` | `WEEKLY`, `MONTHLY`, `YEARLY` | `schema.zmodel:3947` |
+| `SalaryPeriod` | `MONTHLY`, `WEEKLY`, `DAILY`, `HOURLY` | `schema.zmodel:4153` |
+| `OvertimeMode` | `NONE`, `HOURLY`, `DAILY` | `schema.zmodel:4160` |
+| `PayrollCycleStatus` | `DRAFT`, `CALCULATED`, `PAID` | `schema.zmodel:4166` |
+| `SalaryPaymentType` | `SALARY`, `CREDIT`, `ADVANCE` | `schema.zmodel:4172` |
+| `UserCreditTxnType` | `CREDIT`, `PAYMENT` | `schema.zmodel:4178` |
+| `UserCreditSourceType` | `MANUAL`, `BILL`, `PAYROLL` | `schema.zmodel:4183` |
+| `UserLedgerEntryType` | `OPENING`, `PAYROLL_ACCRUAL`, `SALARY_PAYMENT`, `USER_CREDIT_BILL`, `CREDIT_BILL_PAYMENT`, `ADJUSTMENT` | `schema.zmodel:4189` |
+| `UserLedgerDirection` | `DEBIT`, `CREDIT` | `schema.zmodel:4198` |
+| `UserLedgerSourceType` | `MANUAL`, `OPENING`, `PAYROLL_CYCLE`, `PAYROLL_LINE`, `SALARY_PAYMENT`, `BILL`, `PAYROLL`, `ADJUSTMENT` | `schema.zmodel:4203` |
+| `AdjustmentKind` | `ADDITION`, `DEDUCTION` | `schema.zmodel:4214` |
+| `PayrollAdjustmentStatus` | `PENDING`, `PROCESSED`, `CANCELLED` | `schema.zmodel:4219` |
+| `ClientCreditType` | `ISSUE`, `REDEEM`, `ADJUST`, `REFUND`, `EXPIRE` | `schema.zmodel:4389` |
+| `AccountantAccountingAccountCategory` | `ASSET`, `LIABILITY`, `EQUITY`, `INCOME`, `EXPENSE` | `schema.zmodel:4732` |
+| `AccountantAccountingAccountType` | `OTHER_ASSET`, `OTHER_CURRENT_ASSET`, `CASH`, `BANK`, `FIXED_ASSET`, `ACCOUNTS_RECEIVABLE`, `STOCK`, `PAYMENT_CLEARING_ACCOUNT`, `INTANGIBLE_ASSET`, `NON_CURRENT_ASSET`, `DEFERRED_TAX_ASSET`, `OTHER_CURRENT_LIABILITY`, `CREDIT_CARD`, `NON_CURRENT_LIABILITY`, `OTHER_LIABILITY`, `ACCOUNTS_PAYABLE`, `OVERSEAS_TAX_PAYABLE`, `DEFERRED_TAX_LIABILITY`, `EQUITY`, `INCOME`, `OTHER_INCOME`, `EXPENSE`, `COST_OF_GOODS_SOLD`, `OTHER_EXPENSE` | `schema.zmodel:4740` |
+| `AccountantManualJournalStatus` | `DRAFT`, `PUBLISHED` | `schema.zmodel:4767` |
+| `AccountantManualJournalType` | `BOTH`, `CASH`, `ACCRUAL` | `schema.zmodel:4772` |
+| `AccountantJournalEntrySide` | `DEBIT`, `CREDIT` | `schema.zmodel:4778` |
 
 ## Models
 
@@ -1084,7 +1084,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Distributor
 
-PostgreSQL table: `distributors`. Source: `schema.zmodel:900`. Extends `Base`.
+PostgreSQL table: `distributors`. Source: `schema.zmodel:904`. Extends `Base`.
 
 Purpose: Stores supplier identity and company-specific contact details.
 
@@ -1126,7 +1126,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### PurchaseOrder
 
-PostgreSQL table: `purchase_orders`. Source: `schema.zmodel:926`.
+PostgreSQL table: `purchase_orders`. Source: `schema.zmodel:930`.
 
 Purpose: Records stock purchased from a distributor.
 
@@ -1165,7 +1165,7 @@ Declared constraints and policies:
 
 ### DistributorPayment
 
-PostgreSQL table: `distributor_payments`. Source: `schema.zmodel:957`.
+PostgreSQL table: `distributor_payments`. Source: `schema.zmodel:961`.
 
 Purpose: Records payment made toward a distributor purchase or balance.
 
@@ -1200,7 +1200,7 @@ Declared constraints and policies:
 
 ### DistributorPaymentAllocation
 
-PostgreSQL table: `distributor_payment_allocations`. Source: `schema.zmodel:980`.
+PostgreSQL table: `distributor_payment_allocations`. Source: `schema.zmodel:984`.
 
 Purpose: Allocates one distributor payment across purchase orders; schema applied with Prisma db push on 2026-10-11.
 
@@ -1228,7 +1228,7 @@ Declared constraints and policies:
 
 ### DistributorCredit
 
-PostgreSQL table: `distributor_credits`. Source: `schema.zmodel:996`.
+PostgreSQL table: `distributor_credits`. Source: `schema.zmodel:1000`.
 
 Purpose: Records credit owed to a distributor.
 
@@ -1259,7 +1259,7 @@ Declared constraints and policies:
 
 ### PurchaseReturn
 
-PostgreSQL table: `purchase_returns`. Source: `schema.zmodel:1015`.
+PostgreSQL table: `purchase_returns`. Source: `schema.zmodel:1019`.
 
 Purpose: Records stock returned to a distributor.
 
@@ -1292,7 +1292,7 @@ Declared constraints and policies:
 
 ### PurchaseReturnItem
 
-PostgreSQL table: `purchase_return_items`. Source: `schema.zmodel:1035`.
+PostgreSQL table: `purchase_return_items`. Source: `schema.zmodel:1039`.
 
 Purpose: Records items included in a distributor return.
 
@@ -1326,7 +1326,7 @@ Declared constraints and policies:
 
 ### User
 
-PostgreSQL table: `users`. Source: `schema.zmodel:1057`. Extends `Base`.
+PostgreSQL table: `users`. Source: `schema.zmodel:1061`. Extends `Base`.
 
 Purpose: Stores staff identity and login credentials.
 
@@ -1366,7 +1366,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Client
 
-PostgreSQL table: `clients`. Source: `schema.zmodel:1081`. Extends `Base`.
+PostgreSQL table: `clients`. Source: `schema.zmodel:1085`. Extends `Base`.
 
 Purpose: Stores buyer identity across company stores.
 
@@ -1431,7 +1431,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartner
 
-PostgreSQL table: `delivery_partners`. Source: `schema.zmodel:1127`. Extends `Base`.
+PostgreSQL table: `delivery_partners`. Source: `schema.zmodel:1131`. Extends `Base`.
 
 Purpose: Stores delivery worker identity and verification details.
 
@@ -1492,7 +1492,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Trynbuy
 
-PostgreSQL table: `trynbuys`. Source: `schema.zmodel:1175`.
+PostgreSQL table: `trynbuys`. Source: `schema.zmodel:1179`.
 
 Purpose: Tracks a try-at-home customer order.
 
@@ -1557,7 +1557,7 @@ Declared constraints and policies:
 
 ### DispatchAttempt
 
-PostgreSQL table: `dispatch_attempts`. Source: `schema.zmodel:1250`. Extends `Base`.
+PostgreSQL table: `dispatch_attempts`. Source: `schema.zmodel:1254`. Extends `Base`.
 
 Purpose: Records an attempt to assign a delivery job.
 
@@ -1594,7 +1594,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DispatchAssignment
 
-PostgreSQL table: `dispatch_assignments`. Source: `schema.zmodel:1268`. Extends `Base`.
+PostgreSQL table: `dispatch_assignments`. Source: `schema.zmodel:1272`. Extends `Base`.
 
 Purpose: Links a delivery job to its assigned partner.
 
@@ -1627,7 +1627,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartnerEarnings
 
-PostgreSQL table: `delivery_partner_earnings`. Source: `schema.zmodel:1283`. Extends `Base`.
+PostgreSQL table: `delivery_partner_earnings`. Source: `schema.zmodel:1287`. Extends `Base`.
 
 Purpose: Records a partner's earnings for completed work.
 
@@ -1664,7 +1664,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### MarkitBill
 
-PostgreSQL table: `markit_bills`. Source: `schema.zmodel:1308`. Extends `Base`.
+PostgreSQL table: `markit_bills`. Source: `schema.zmodel:1312`. Extends `Base`.
 
 Purpose: Stores billing data for a marketplace try-at-home order.
 
@@ -1718,7 +1718,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### OrderStatusEvent
 
-PostgreSQL table: `order_status_events`. Source: `schema.zmodel:1349`. Extends `Base`.
+PostgreSQL table: `order_status_events`. Source: `schema.zmodel:1353`. Extends `Base`.
 
 Purpose: Records a timestamped marketplace order status change.
 
@@ -1756,7 +1756,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartnerWalletTransaction
 
-PostgreSQL table: `delivery_partner_wallet_transactions`. Source: `schema.zmodel:1371`. Extends `Base`.
+PostgreSQL table: `delivery_partner_wallet_transactions`. Source: `schema.zmodel:1375`. Extends `Base`.
 
 Purpose: Records credit or debit activity in a delivery partner wallet.
 
@@ -1795,7 +1795,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartnerPayout
 
-PostgreSQL table: `delivery_partner_payouts`. Source: `schema.zmodel:1394`. Extends `Base`.
+PostgreSQL table: `delivery_partner_payouts`. Source: `schema.zmodel:1398`. Extends `Base`.
 
 Purpose: Records a payout to a delivery partner.
 
@@ -1827,7 +1827,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartnerBonus
 
-PostgreSQL table: `delivery_partner_bonuses`. Source: `schema.zmodel:1408`. Extends `Base`.
+PostgreSQL table: `delivery_partner_bonuses`. Source: `schema.zmodel:1412`. Extends `Base`.
 
 Purpose: Records an additional delivery partner earning.
 
@@ -1865,7 +1865,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryPartnerPenalty
 
-PostgreSQL table: `delivery_partner_penalties`. Source: `schema.zmodel:1429`. Extends `Base`.
+PostgreSQL table: `delivery_partner_penalties`. Source: `schema.zmodel:1433`. Extends `Base`.
 
 Purpose: Records a deduction from a delivery partner's earnings.
 
@@ -1903,7 +1903,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### CompanyPenalty
 
-PostgreSQL table: `company_penalties`. Source: `schema.zmodel:1450`. Extends `Base`.
+PostgreSQL table: `company_penalties`. Source: `schema.zmodel:1454`. Extends `Base`.
 
 Purpose: Records a penalty charged to a company.
 
@@ -1941,7 +1941,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DeliveryNotification
 
-PostgreSQL table: `delivery_notifications`. Source: `schema.zmodel:1473`. Extends `Base`.
+PostgreSQL table: `delivery_notifications`. Source: `schema.zmodel:1477`. Extends `Base`.
 
 Purpose: Stores a notification addressed to a delivery partner.
 
@@ -1971,7 +1971,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### TrynbuyCartItem
 
-PostgreSQL table: `trynbuy_cart_items`. Source: `schema.zmodel:1486`.
+PostgreSQL table: `trynbuy_cart_items`. Source: `schema.zmodel:1490`.
 
 Purpose: Stores one product selection in a try-at-home cart.
 
@@ -2000,7 +2000,7 @@ Declared constraints and policies:
 
 ### TrynbuyReturnedItem
 
-PostgreSQL table: `trynbuy_returned_items`. Source: `schema.zmodel:1503`.
+PostgreSQL table: `trynbuy_returned_items`. Source: `schema.zmodel:1507`.
 
 Purpose: Stores an item returned after a try-at-home order.
 
@@ -2029,7 +2029,7 @@ Declared constraints and policies:
 
 ### Coupon
 
-PostgreSQL table: `coupons`. Source: `schema.zmodel:1520`.
+PostgreSQL table: `coupons`. Source: `schema.zmodel:1524`.
 
 Purpose: Defines a company coupon and its eligibility rules.
 
@@ -2071,7 +2071,7 @@ Declared constraints and policies:
 
 ### CouponUsage
 
-PostgreSQL table: `coupon_usages`. Source: `schema.zmodel:1561`.
+PostgreSQL table: `coupon_usages`. Source: `schema.zmodel:1565`.
 
 Purpose: Records redemption of a coupon.
 
@@ -2098,7 +2098,7 @@ Declared constraints and policies:
 
 ### CouponClient
 
-PostgreSQL table: `coupon_clients`. Source: `schema.zmodel:1578`.
+PostgreSQL table: `coupon_clients`. Source: `schema.zmodel:1582`.
 
 Purpose: Limits or associates a coupon with a customer.
 
@@ -2124,7 +2124,7 @@ Declared constraints and policies:
 
 ### Pipeline
 
-PostgreSQL table: `pipelines`. Source: `schema.zmodel:1616`. Extends `Base`.
+PostgreSQL table: `pipelines`. Source: `schema.zmodel:1620`. Extends `Base`.
 
 Purpose: Defines a stage in a company's CRM pipeline.
 
@@ -2155,7 +2155,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Category
 
-PostgreSQL table: `categories`. Source: `schema.zmodel:1629`.
+PostgreSQL table: `categories`. Source: `schema.zmodel:1633`.
 
 Purpose: Classifies products and stores category-level tax settings.
 
@@ -2197,7 +2197,7 @@ Declared constraints and policies:
 
 ### Subcategory
 
-PostgreSQL table: `subcategories`. Source: `schema.zmodel:1659`.
+PostgreSQL table: `subcategories`. Source: `schema.zmodel:1663`.
 
 Purpose: Subdivides a product category.
 
@@ -2237,7 +2237,7 @@ Declared constraints and policies:
 
 ### Brand
 
-PostgreSQL table: `brands`. Source: `schema.zmodel:1689`.
+PostgreSQL table: `brands`. Source: `schema.zmodel:1693`.
 
 Purpose: Stores a product brand for a company.
 
@@ -2270,7 +2270,7 @@ Declared constraints and policies:
 
 ### Collection
 
-PostgreSQL table: `collections`. Source: `schema.zmodel:1711`.
+PostgreSQL table: `collections`. Source: `schema.zmodel:1715`.
 
 Purpose: Groups products for storefront browsing.
 
@@ -2302,7 +2302,7 @@ Declared constraints and policies:
 
 ### Product
 
-PostgreSQL table: `products`. Source: `schema.zmodel:1732`.
+PostgreSQL table: `products`. Source: `schema.zmodel:1736`.
 
 Purpose: Stores a product identity and its catalog classification.
 
@@ -2357,7 +2357,7 @@ Declared constraints and policies:
 
 ### ServiceConfiguration
 
-PostgreSQL table: `service_configurations`. Source: `schema.zmodel:1784`.
+PostgreSQL table: `service_configurations`. Source: `schema.zmodel:1788`.
 
 Purpose: Company-owned reusable warranty, guarantee or maintenance configuration; dedicated staff APIs own edits and availability.
 
@@ -2387,7 +2387,7 @@ Declared constraints and policies:
 
 ### ServiceConfigurationRevision
 
-PostgreSQL table: `service_configuration_revisions`. Source: `schema.zmodel:1801`.
+PostgreSQL table: `service_configuration_revisions`. Source: `schema.zmodel:1805`.
 
 Purpose: Immutable name, kind and rules snapshot for each saved configuration revision.
 
@@ -2415,7 +2415,7 @@ Declared constraints and policies:
 
 ### ProductServiceLink
 
-PostgreSQL table: `product_service_links`. Source: `schema.zmodel:1816`.
+PostgreSQL table: `product_service_links`. Source: `schema.zmodel:1820`.
 
 Purpose: Company-scoped many-to-many assignment of reusable configurations to a product across all variants.
 
@@ -2441,7 +2441,7 @@ Declared constraints and policies:
 
 ### CustomerProduct
 
-PostgreSQL table: `customer_products`. Source: `schema.zmodel:1829`.
+PostgreSQL table: `customer_products`. Source: `schema.zmodel:1833`.
 
 Purpose: One physical unit owned by a customer, with sale provenance and optional manufacturer serial number; retained after catalog deletion.
 
@@ -2485,7 +2485,7 @@ Declared constraints and policies:
 
 ### CustomerProductNumbering
 
-PostgreSQL table: `customer_product_numbering`. Source: `schema.zmodel:1870`.
+PostgreSQL table: `customer_product_numbering`. Source: `schema.zmodel:1874`.
 
 Purpose: Company-scoped prefix and transactional sequential counter for customer-owned physical-unit references; all sales channels share it.
 
@@ -2507,7 +2507,7 @@ Declared constraints and policies:
 
 ### CustomerServiceAgreement
 
-PostgreSQL table: `customer_service_agreements`. Source: `schema.zmodel:1879`.
+PostgreSQL table: `customer_service_agreements`. Source: `schema.zmodel:1883`.
 
 Purpose: Agreed configuration revision and rules snapshot for one customer unit, including coverage or maintenance dates and visit count.
 
@@ -2543,7 +2543,7 @@ Declared constraints and policies:
 
 ### MaintenanceOccurrence
 
-PostgreSQL table: `maintenance_occurrences`. Source: `schema.zmodel:1904`.
+PostgreSQL table: `maintenance_occurrences`. Source: `schema.zmodel:1908`.
 
 Purpose: A dated maintenance obligation; unique agreement/date pairs prevent duplicate due work.
 
@@ -2570,7 +2570,7 @@ Declared constraints and policies:
 
 ### ServiceJob
 
-PostgreSQL table: `service_jobs`. Source: `schema.zmodel:1918`.
+PostgreSQL table: `service_jobs`. Source: `schema.zmodel:1922`.
 
 Purpose: Staff-managed guarantee/warranty claim or maintenance visit, retaining its own agreed terms, answers, charges and optional issued invoice.
 
@@ -2608,7 +2608,7 @@ Declared constraints and policies:
 
 ### ServiceCharge
 
-PostgreSQL table: `service_charges`. Source: `schema.zmodel:1947`.
+PostgreSQL table: `service_charges`. Source: `schema.zmodel:1951`.
 
 Purpose: Company-owned reusable non-stock service charge defaults; jobs copy billing lines so later edits or archiving preserve existing work.
 
@@ -2637,7 +2637,7 @@ Declared constraints and policies:
 
 ### ServiceReading
 
-PostgreSQL table: `service_readings`. Source: `schema.zmodel:1963`.
+PostgreSQL table: `service_readings`. Source: `schema.zmodel:1967`.
 
 Purpose: Dated staff-entered custom readings for a customer product and selected agreement; evidence is manually assessed.
 
@@ -2663,7 +2663,7 @@ Declared constraints and policies:
 
 ### ServiceAudit
 
-PostgreSQL table: `service_audit`. Source: `schema.zmodel:1976`.
+PostgreSQL table: `service_audit`. Source: `schema.zmodel:1980`.
 
 Purpose: Append-only before/after evidence and reason for after-sales registration, configuration, agreement and service changes.
 
@@ -2691,7 +2691,7 @@ Declared constraints and policies:
 
 ### ServiceReminder
 
-PostgreSQL table: `service_reminders`. Source: `schema.zmodel:1991`.
+PostgreSQL table: `service_reminders`. Source: `schema.zmodel:1995`.
 
 Purpose: Receipt deduplicating an internal maintenance reminder for one occurrence and lead-day offset.
 
@@ -2715,7 +2715,7 @@ Declared constraints and policies:
 
 ### Variant
 
-PostgreSQL table: `variants`. Source: `schema.zmodel:2002`.
+PostgreSQL table: `variants`. Source: `schema.zmodel:2006`.
 
 Purpose: Stores a sellable product variation with prices and display data.
 
@@ -2774,7 +2774,7 @@ Declared constraints and policies:
 
 ### Item
 
-PostgreSQL table: `items`. Source: `schema.zmodel:2057`.
+PostgreSQL table: `items`. Source: `schema.zmodel:2061`.
 
 Purpose: Stores the stock-bearing size or option for a variant.
 
@@ -2816,7 +2816,7 @@ Declared constraints and policies:
 
 ### ShippingBox
 
-PostgreSQL table: `shipping_boxes`. Source: `schema.zmodel:2090`.
+PostgreSQL table: `shipping_boxes`. Source: `schema.zmodel:2094`.
 
 Purpose: Defines reusable shipping parcel dimensions.
 
@@ -2851,7 +2851,7 @@ Declared constraints and policies:
 
 ### Bill
 
-PostgreSQL table: `bills`. Source: `schema.zmodel:2115`. Extends `Base`.
+PostgreSQL table: `bills`. Source: `schema.zmodel:2119`. Extends `Base`.
 
 Purpose: Records a sale and its financial totals.
 
@@ -2947,7 +2947,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommFaq
 
-PostgreSQL table: `ecomm_faqs`. Source: `schema.zmodel:2207`.
+PostgreSQL table: `ecomm_faqs`. Source: `schema.zmodel:2211`.
 
 Purpose: Stores a company storefront FAQ.
 
@@ -2976,7 +2976,7 @@ Declared constraints and policies:
 
 ### EcommFeedback
 
-PostgreSQL table: `ecomm_feedback`. Source: `schema.zmodel:2224`.
+PostgreSQL table: `ecomm_feedback`. Source: `schema.zmodel:2228`.
 
 Purpose: Stores a customer testimonial or feedback entry.
 
@@ -3014,7 +3014,7 @@ Declared constraints and policies:
 
 ### EcommProductReview
 
-PostgreSQL table: `ecomm_product_reviews`. Source: `schema.zmodel:2250`. Extends `Base`.
+PostgreSQL table: `ecomm_product_reviews`. Source: `schema.zmodel:2254`. Extends `Base`.
 
 Purpose: Stores a customer's review of a purchased product variant.
 
@@ -3054,7 +3054,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommContactMessage
 
-PostgreSQL table: `ecomm_contact_messages`. Source: `schema.zmodel:2274`.
+PostgreSQL table: `ecomm_contact_messages`. Source: `schema.zmodel:2278`.
 
 Purpose: Stores a contact-form enquiry to the company.
 
@@ -3086,7 +3086,7 @@ Declared constraints and policies:
 
 ### EcommBlog
 
-PostgreSQL table: `ecomm_blogs`. Source: `schema.zmodel:2294`.
+PostgreSQL table: `ecomm_blogs`. Source: `schema.zmodel:2298`.
 
 Purpose: Stores a storefront blog post.
 
@@ -3122,7 +3122,7 @@ Declared constraints and policies:
 
 ### EcommGallery
 
-PostgreSQL table: `ecomm_gallery`. Source: `schema.zmodel:2332`.
+PostgreSQL table: `ecomm_gallery`. Source: `schema.zmodel:2336`.
 
 Purpose: Stores a published photo or video for the storefront.
 
@@ -3154,7 +3154,7 @@ Declared constraints and policies:
 
 ### EcommCheckout
 
-PostgreSQL table: `ecomm_checkouts`. Source: `schema.zmodel:2352`. Extends `Base`.
+PostgreSQL table: `ecomm_checkouts`. Source: `schema.zmodel:2356`. Extends `Base`.
 
 Purpose: Records a storefront checkout and its payment state.
 
@@ -3206,7 +3206,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommOrder
 
-PostgreSQL table: `ecomm_orders`. Source: `schema.zmodel:2391`. Extends `Base`.
+PostgreSQL table: `ecomm_orders`. Source: `schema.zmodel:2395`. Extends `Base`.
 
 Purpose: Stores the customer-facing order and purchase-time item snapshot.
 
@@ -3263,7 +3263,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommCart
 
-PostgreSQL table: `ecomm_carts`. Source: `schema.zmodel:2433`. Extends `Base`.
+PostgreSQL table: `ecomm_carts`. Source: `schema.zmodel:2437`. Extends `Base`.
 
 Purpose: Stores a customer's persistent company-scoped cart.
 
@@ -3299,7 +3299,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommOrderStatusHistory
 
-PostgreSQL table: `ecomm_order_status_history`. Source: `schema.zmodel:2452`. Extends `Base`.
+PostgreSQL table: `ecomm_order_status_history`. Source: `schema.zmodel:2456`. Extends `Base`.
 
 Purpose: Records the status timeline of a storefront order.
 
@@ -3336,7 +3336,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommPickupRequest
 
-PostgreSQL table: `ecomm_pickup_requests`. Source: `schema.zmodel:2478`. Extends `Base`.
+PostgreSQL table: `ecomm_pickup_requests`. Source: `schema.zmodel:2482`. Extends `Base`.
 
 Purpose: Records a customer pickup request.
 
@@ -3379,7 +3379,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommWishlist
 
-PostgreSQL table: `ecomm_wishlists`. Source: `schema.zmodel:2504`. Extends `Base`.
+PostgreSQL table: `ecomm_wishlists`. Source: `schema.zmodel:2508`. Extends `Base`.
 
 Purpose: Stores a customer's persistent company-scoped wishlist.
 
@@ -3415,7 +3415,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommPaymentIntent
 
-PostgreSQL table: `ecomm_payment_intents`. Source: `schema.zmodel:2532`.
+PostgreSQL table: `ecomm_payment_intents`. Source: `schema.zmodel:2536`.
 
 Purpose: Stores pending payment attempts created by the trusted ecommerce checkout/payment API.
 
@@ -3448,7 +3448,7 @@ Declared constraints and policies:
 
 ### EcommPaymentVerification
 
-PostgreSQL table: `ecomm_payment_verifications`. Source: `schema.zmodel:2554`. Extends `Base`.
+PostgreSQL table: `ecomm_payment_verifications`. Source: `schema.zmodel:2558`. Extends `Base`.
 
 Purpose: Stores a verified gateway-payment proof used during settlement.
 
@@ -3487,7 +3487,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommOrderRequest
 
-PostgreSQL table: `ecomm_order_requests`. Source: `schema.zmodel:2580`. Extends `Base`.
+PostgreSQL table: `ecomm_order_requests`. Source: `schema.zmodel:2584`. Extends `Base`.
 
 Purpose: Records a cancellation, return, or exchange request against an order.
 
@@ -3529,7 +3529,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### EcommPickupLocation
 
-PostgreSQL table: `ecomm_pickup_locations`. Source: `schema.zmodel:2607`. Extends `Base`.
+PostgreSQL table: `ecomm_pickup_locations`. Source: `schema.zmodel:2611`. Extends `Base`.
 
 Purpose: Defines a pickup point offered by a company.
 
@@ -3578,7 +3578,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Entry
 
-PostgreSQL table: `entries`. Source: `schema.zmodel:2639`. Extends `Base`.
+PostgreSQL table: `entries`. Source: `schema.zmodel:2643`. Extends `Base`.
 
 Purpose: Stores a line item on a bill.
 
@@ -3632,7 +3632,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### DocumentStatusHistory
 
-PostgreSQL table: `document_status_history`. Source: `schema.zmodel:2678`.
+PostgreSQL table: `document_status_history`. Source: `schema.zmodel:2682`.
 
 Purpose: Database-trigger audit of bill, ecommerce order and checkout status/payment-status changes; survives document deletion and is read only through a tenant-scoped API.
 
@@ -3662,7 +3662,7 @@ Declared constraints and policies:
 
 ### BillHistory
 
-PostgreSQL table: `bill_history`. Source: `schema.zmodel:2696`. Extends `Base`.
+PostgreSQL table: `bill_history`. Source: `schema.zmodel:2700`. Extends `Base`.
 
 Purpose: Records a historical change to a bill.
 
@@ -3693,7 +3693,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Account
 
-PostgreSQL table: `accounts`. Source: `schema.zmodel:2709`. Extends `Base`.
+PostgreSQL table: `accounts`. Source: `schema.zmodel:2713`. Extends `Base`.
 
 Purpose: Stores an account associated with a company.
 
@@ -3725,7 +3725,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### TokenEntry
 
-PostgreSQL table: `token_entries`. Source: `schema.zmodel:2723`. Extends `Base`.
+PostgreSQL table: `token_entries`. Source: `schema.zmodel:2727`. Extends `Base`.
 
 Purpose: Records an account token or accounting entry.
 
@@ -3767,7 +3767,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### ExpenseCategory
 
-PostgreSQL table: `expense_categories`. Source: `schema.zmodel:2746`. Extends `Base`.
+PostgreSQL table: `expense_categories`. Source: `schema.zmodel:2750`. Extends `Base`.
 
 Purpose: Classifies company expenses.
 
@@ -3800,7 +3800,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Expense
 
-PostgreSQL table: `expenses`. Source: `schema.zmodel:2760`. Extends `Base`.
+PostgreSQL table: `expenses`. Source: `schema.zmodel:2764`. Extends `Base`.
 
 Purpose: Records a company expense.
 
@@ -3854,7 +3854,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### RecurringInvoice
 
-PostgreSQL table: `recurring_invoices`. Source: `schema.zmodel:2799`.
+PostgreSQL table: `recurring_invoices`. Source: `schema.zmodel:2803`.
 
 Purpose: Company/customer recurring invoice profile. Draft occurrences have no posting; issued occurrences use the normal Bill source transaction.
 
@@ -3896,7 +3896,7 @@ Declared constraints and policies:
 
 ### RecurringInvoiceOccurrence
 
-PostgreSQL table: `recurring_invoice_occurrences`. Source: `schema.zmodel:2828`.
+PostgreSQL table: `recurring_invoice_occurrences`. Source: `schema.zmodel:2832`.
 
 Purpose: Durable profile/date generation receipt with a frozen invoice template and optional unique normal Bill reference.
 
@@ -3927,7 +3927,7 @@ Declared constraints and policies:
 
 ### RetainerInvoice
 
-PostgreSQL table: `retainer_invoices`. Source: `schema.zmodel:2852`.
+PostgreSQL table: `retainer_invoices`. Source: `schema.zmodel:2856`.
 
 Purpose: Numbered advance request. Creation posts no revenue, tax, stock or receivable; collected credit is held in a frozen liability account.
 
@@ -3968,7 +3968,7 @@ Declared constraints and policies:
 
 ### RetainerEvent
 
-PostgreSQL table: `retainer_events`. Source: `schema.zmodel:2880`.
+PostgreSQL table: `retainer_events`. Source: `schema.zmodel:2884`.
 
 Purpose: Append-only dated retainer movement linked to a balanced system journal; financial application receipts also participate in normal invoice balances.
 
@@ -4011,7 +4011,7 @@ Declared constraints and policies:
 
 ### RecurringExpense
 
-PostgreSQL table: `recurring_expenses`. Source: `schema.zmodel:2910`.
+PostgreSQL table: `recurring_expenses`. Source: `schema.zmodel:2914`.
 
 Purpose: Company-owned fixed monthly expense schedule processed by scoped APIs and the authenticated Vercel cron.
 
@@ -4048,7 +4048,7 @@ Declared constraints and policies:
 
 ### RecurringExpenseOccurrence
 
-PostgreSQL table: `recurring_expense_occurrences`. Source: `schema.zmodel:2935`.
+PostgreSQL table: `recurring_expense_occurrences`. Source: `schema.zmodel:2939`.
 
 Purpose: Unique schedule/date receipt committed atomically with a pending expense and retained after expense deletion.
 
@@ -4074,7 +4074,7 @@ Declared constraints and policies:
 
 ### Payment
 
-PostgreSQL table: `payments`. Source: `schema.zmodel:2949`. Extends `Base`.
+PostgreSQL table: `payments`. Source: `schema.zmodel:2953`. Extends `Base`.
 
 Purpose: Records a payment associated with a sale or account.
 
@@ -4122,7 +4122,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Address
 
-PostgreSQL table: `addresses`. Source: `schema.zmodel:2980`. Extends `Base`.
+PostgreSQL table: `addresses`. Source: `schema.zmodel:2984`. Extends `Base`.
 
 Purpose: Stores a person or company address.
 
@@ -4182,7 +4182,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Conversation
 
-PostgreSQL table: `conversations`. Source: `schema.zmodel:3025`. Extends `Base`.
+PostgreSQL table: `conversations`. Source: `schema.zmodel:3029`. Extends `Base`.
 
 Purpose: Groups messages exchanged in a conversation.
 
@@ -4212,7 +4212,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Message
 
-PostgreSQL table: `messages`. Source: `schema.zmodel:3036`. Extends `Base`.
+PostgreSQL table: `messages`. Source: `schema.zmodel:3040`. Extends `Base`.
 
 Purpose: Stores one message in a conversation.
 
@@ -4247,7 +4247,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### CompanyUser
 
-PostgreSQL table: `company_users`. Source: `schema.zmodel:3052`.
+PostgreSQL table: `company_users`. Source: `schema.zmodel:3056`.
 
 Purpose: Links a staff user to a company with role and employment state.
 
@@ -4296,7 +4296,7 @@ Declared constraints and policies:
 
 ### CompanyClient
 
-PostgreSQL table: `company_clients`. Source: `schema.zmodel:3089`.
+PostgreSQL table: `company_clients`. Source: `schema.zmodel:3093`.
 
 Purpose: Links a customer to a company with company-specific identity and CRM state.
 
@@ -4335,7 +4335,7 @@ Declared constraints and policies:
 
 ### EcommMarketingVerification
 
-PostgreSQL table: `ecomm_marketing_verifications`. Source: `schema.zmodel:3124`.
+PostgreSQL table: `ecomm_marketing_verifications`. Source: `schema.zmodel:3128`.
 
 Purpose: Records verification of a marketing contact or consent.
 
@@ -4362,7 +4362,7 @@ Declared constraints and policies:
 
 ### EcommMarketingCampaign
 
-PostgreSQL table: `ecomm_marketing_campaigns`. Source: `schema.zmodel:3138`.
+PostgreSQL table: `ecomm_marketing_campaigns`. Source: `schema.zmodel:3142`.
 
 Purpose: Defines a company marketing campaign.
 
@@ -4392,7 +4392,7 @@ Declared constraints and policies:
 
 ### EcommMarketingAutomation
 
-PostgreSQL table: `ecomm_marketing_automations`. Source: `schema.zmodel:3155`.
+PostgreSQL table: `ecomm_marketing_automations`. Source: `schema.zmodel:3159`.
 
 Purpose: Defines an automated marketing rule.
 
@@ -4419,7 +4419,7 @@ Declared constraints and policies:
 
 ### EcommMarketingJob
 
-PostgreSQL table: `ecomm_marketing_jobs`. Source: `schema.zmodel:3169`.
+PostgreSQL table: `ecomm_marketing_jobs`. Source: `schema.zmodel:3173`.
 
 Purpose: Queues or records delivery of a marketing message.
 
@@ -4457,7 +4457,7 @@ Declared constraints and policies:
 
 ### EcommCrmActivity
 
-PostgreSQL table: `ecomm_crm_activities`. Source: `schema.zmodel:3194`.
+PostgreSQL table: `ecomm_crm_activities`. Source: `schema.zmodel:3198`.
 
 Purpose: Records an activity on a company customer relationship.
 
@@ -4486,7 +4486,7 @@ Declared constraints and policies:
 
 ### EcommMarketingAudit
 
-PostgreSQL table: `ecomm_marketing_audit`. Source: `schema.zmodel:3210`.
+PostgreSQL table: `ecomm_marketing_audit`. Source: `schema.zmodel:3214`.
 
 Purpose: Records changes or events in marketing operations.
 
@@ -4511,7 +4511,7 @@ Declared constraints and policies:
 
 ### UserConversation
 
-PostgreSQL table: `user_conversations`. Source: `schema.zmodel:3222`.
+PostgreSQL table: `user_conversations`. Source: `schema.zmodel:3226`.
 
 Purpose: Links a staff user to a conversation.
 
@@ -4534,7 +4534,7 @@ Declared constraints and policies:
 
 ### ClientConversation
 
-PostgreSQL table: `client_conversations`. Source: `schema.zmodel:3233`.
+PostgreSQL table: `client_conversations`. Source: `schema.zmodel:3237`.
 
 Purpose: Links a customer to a conversation.
 
@@ -4557,7 +4557,7 @@ Declared constraints and policies:
 
 ### UserClient
 
-PostgreSQL table: `user_clients`. Source: `schema.zmodel:3244`.
+PostgreSQL table: `user_clients`. Source: `schema.zmodel:3248`.
 
 Purpose: Links a staff user to a customer.
 
@@ -4580,7 +4580,7 @@ Declared constraints and policies:
 
 ### VariantSizeBarcode
 
-PostgreSQL table: `variant_size_barcodes`. Source: `schema.zmodel:3256`.
+PostgreSQL table: `variant_size_barcodes`. Source: `schema.zmodel:3260`.
 
 Purpose: Maps a barcode to a variant and option value.
 
@@ -4605,7 +4605,7 @@ Declared constraints and policies:
 
 ### EmailOtp
 
-PostgreSQL table: `email_otp`. Source: `schema.zmodel:3269`. Extends `Base`.
+PostgreSQL table: `email_otp`. Source: `schema.zmodel:3273`. Extends `Base`.
 
 Purpose: Stores a short-lived email one-time code.
 
@@ -4634,7 +4634,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Notification
 
-PostgreSQL table: `notifications`. Source: `schema.zmodel:3282`.
+PostgreSQL table: `notifications`. Source: `schema.zmodel:3286`.
 
 Purpose: Stores a user-facing notification.
 
@@ -4668,7 +4668,7 @@ Declared constraints and policies:
 
 ### PushToken
 
-PostgreSQL table: `push_token`. Source: `schema.zmodel:3314`. Extends `Base`.
+PostgreSQL table: `push_token`. Source: `schema.zmodel:3318`. Extends `Base`.
 
 Purpose: Stores a push-notification token for a user.
 
@@ -4698,7 +4698,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### CapPushToken
 
-PostgreSQL table: `cap_push_token`. Source: `schema.zmodel:3325`. Extends `Base`.
+PostgreSQL table: `cap_push_token`. Source: `schema.zmodel:3329`. Extends `Base`.
 
 Purpose: Stores a Capacitor push-notification token.
 
@@ -4728,7 +4728,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Cart
 
-PostgreSQL table: `cart`. Source: `schema.zmodel:3336`. Extends `Base`.
+PostgreSQL table: `cart`. Source: `schema.zmodel:3340`. Extends `Base`.
 
 Purpose: Stores a customer's marketplace cart.
 
@@ -4757,7 +4757,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### CartCompanyClient
 
-PostgreSQL table: `cart_company_client`. Source: `schema.zmodel:3348`.
+PostgreSQL table: `cart_company_client`. Source: `schema.zmodel:3352`.
 
 Purpose: Links marketplace cart state to a company customer.
 
@@ -4782,7 +4782,7 @@ Declared constraints and policies:
 
 ### Like
 
-PostgreSQL table: `likes`. Source: `schema.zmodel:3364`. Extends `Base`.
+PostgreSQL table: `likes`. Source: `schema.zmodel:3368`. Extends `Base`.
 
 Purpose: Stores a customer's liked item.
 
@@ -4812,7 +4812,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### LikeCompanyClient
 
-PostgreSQL table: `like_company_client`. Source: `schema.zmodel:3377`.
+PostgreSQL table: `like_company_client`. Source: `schema.zmodel:3381`.
 
 Purpose: Links a liked item to a company customer.
 
@@ -4837,7 +4837,7 @@ Declared constraints and policies:
 
 ### SaveErrorRequest
 
-PostgreSQL table: `save_error_requests`. Source: `schema.zmodel:3393`. Extends `Base`.
+PostgreSQL table: `save_error_requests`. Source: `schema.zmodel:3397`. Extends `Base`.
 
 Purpose: Records an application error report.
 
@@ -4867,7 +4867,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### MoneyTransaction
 
-PostgreSQL table: `money_transactions`. Source: `schema.zmodel:3446`.
+PostgreSQL table: `money_transactions`. Source: `schema.zmodel:3450`.
 
 Purpose: Records a financial transaction between accounts.
 
@@ -4900,7 +4900,7 @@ Declared constraints and policies:
 
 ### AccountLedgerEntry
 
-PostgreSQL table: `account_ledger_entries`. Source: `schema.zmodel:3473`.
+PostgreSQL table: `account_ledger_entries`. Source: `schema.zmodel:3477`.
 
 Purpose: Stores a ledger posting for an account.
 
@@ -4936,7 +4936,7 @@ Declared constraints and policies:
 
 ### Investment
 
-PostgreSQL table: `investments`. Source: `schema.zmodel:3509`.
+PostgreSQL table: `investments`. Source: `schema.zmodel:3513`.
 
 Purpose: Records money invested into or withdrawn from a company.
 
@@ -4969,7 +4969,7 @@ Declared constraints and policies:
 
 ### CashAccount
 
-PostgreSQL table: `cash_accounts`. Source: `schema.zmodel:3539`.
+PostgreSQL table: `cash_accounts`. Source: `schema.zmodel:3543`.
 
 Purpose: Defines a company cash account.
 
@@ -4995,7 +4995,7 @@ Declared constraints and policies:
 
 ### BankAccount
 
-PostgreSQL table: `bank_accounts`. Source: `schema.zmodel:3556`.
+PostgreSQL table: `bank_accounts`. Source: `schema.zmodel:3560`.
 
 Purpose: Defines a company bank account.
 
@@ -5029,7 +5029,7 @@ Declared constraints and policies:
 
 ### AccountTransfer
 
-PostgreSQL table: `account_transfers`. Source: `schema.zmodel:3589`.
+PostgreSQL table: `account_transfers`. Source: `schema.zmodel:3593`.
 
 Purpose: Records a transfer between company accounts.
 
@@ -5059,7 +5059,7 @@ Declared constraints and policies:
 
 ### AiChat
 
-PostgreSQL table: `ai_chats`. Source: `schema.zmodel:3615`. Extends `Base`.
+PostgreSQL table: `ai_chats`. Source: `schema.zmodel:3619`. Extends `Base`.
 
 Purpose: Groups messages in an AI chat session.
 
@@ -5100,7 +5100,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### AiChatMessage
 
-PostgreSQL table: `ai_chat_messages`. Source: `schema.zmodel:3637`. Extends `Base`.
+PostgreSQL table: `ai_chat_messages`. Source: `schema.zmodel:3641`. Extends `Base`.
 
 Purpose: Stores a message in an AI chat.
 
@@ -5133,7 +5133,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### AiMemory
 
-PostgreSQL table: `ai_memories`. Source: `schema.zmodel:3651`. Extends `Base`.
+PostgreSQL table: `ai_memories`. Source: `schema.zmodel:3655`. Extends `Base`.
 
 Purpose: Stores persistent context for an AI assistant.
 
@@ -5166,7 +5166,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### StatementBatch
 
-PostgreSQL table: `statement_batches`. Source: `schema.zmodel:3665`. Extends `Base`.
+PostgreSQL table: `statement_batches`. Source: `schema.zmodel:3669`. Extends `Base`.
 
 Purpose: Groups imported bank statement rows.
 
@@ -5203,7 +5203,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### StatementRow
 
-PostgreSQL table: `statement_rows`. Source: `schema.zmodel:3683`. Extends `Base`.
+PostgreSQL table: `statement_rows`. Source: `schema.zmodel:3687`. Extends `Base`.
 
 Purpose: Stores one imported bank statement transaction.
 
@@ -5243,7 +5243,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### StatementMapping
 
-PostgreSQL table: `statement_mappings`. Source: `schema.zmodel:3704`. Extends `Base`.
+PostgreSQL table: `statement_mappings`. Source: `schema.zmodel:3708`. Extends `Base`.
 
 Purpose: Maps imported statement columns to accounting fields.
 
@@ -5277,7 +5277,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Quote
 
-PostgreSQL table: `quotes`. Source: `schema.zmodel:3719`. Extends `Base`.
+PostgreSQL table: `quotes`. Source: `schema.zmodel:3723`. Extends `Base`.
 
 Purpose: Records a sales quotation sent to a customer.
 
@@ -5328,7 +5328,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### QuoteItem
 
-PostgreSQL table: `quote_items`. Source: `schema.zmodel:3757`. Extends `Base`.
+PostgreSQL table: `quote_items`. Source: `schema.zmodel:3761`. Extends `Base`.
 
 Purpose: Stores one line on a quotation.
 
@@ -5365,7 +5365,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### QuoteCustomFieldValue
 
-PostgreSQL table: `quote_custom_field_values`. Source: `schema.zmodel:3776`. Extends `Base`.
+PostgreSQL table: `quote_custom_field_values`. Source: `schema.zmodel:3780`. Extends `Base`.
 
 Purpose: Stores a custom value attached to a quotation.
 
@@ -5396,7 +5396,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Project
 
-PostgreSQL table: `projects`. Source: `schema.zmodel:3789`. Extends `Base`.
+PostgreSQL table: `projects`. Source: `schema.zmodel:3793`. Extends `Base`.
 
 Purpose: Defines a company project.
 
@@ -5444,7 +5444,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### ProjectUser
 
-PostgreSQL table: `project_users`. Source: `schema.zmodel:3819`. Extends `Base`.
+PostgreSQL table: `project_users`. Source: `schema.zmodel:3823`. Extends `Base`.
 
 Purpose: Assigns a staff user to a project.
 
@@ -5476,7 +5476,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### ProjectTask
 
-PostgreSQL table: `project_tasks`. Source: `schema.zmodel:3832`. Extends `Base`.
+PostgreSQL table: `project_tasks`. Source: `schema.zmodel:3836`. Extends `Base`.
 
 Purpose: Stores a task within a project.
 
@@ -5507,7 +5507,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### SalesOrder
 
-PostgreSQL table: `sales_orders`. Source: `schema.zmodel:3845`. Extends `Base`.
+PostgreSQL table: `sales_orders`. Source: `schema.zmodel:3849`. Extends `Base`.
 
 Purpose: Records a confirmed sales order.
 
@@ -5560,7 +5560,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### SalesOrderItem
 
-PostgreSQL table: `sales_order_items`. Source: `schema.zmodel:3884`. Extends `Base`.
+PostgreSQL table: `sales_order_items`. Source: `schema.zmodel:3888`. Extends `Base`.
 
 Purpose: Stores a line item on a sales order.
 
@@ -5597,7 +5597,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Shift
 
-PostgreSQL table: `shifts`. Source: `schema.zmodel:3949`. Extends `Base`.
+PostgreSQL table: `shifts`. Source: `schema.zmodel:3953`. Extends `Base`.
 
 Purpose: Defines a reusable staff shift and payroll policy.
 
@@ -5660,7 +5660,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### CompanyHoliday
 
-PostgreSQL table: `company_holidays`. Source: `schema.zmodel:3997`. Extends `Base`.
+PostgreSQL table: `company_holidays`. Source: `schema.zmodel:4001`. Extends `Base`.
 
 Purpose: Defines a company holiday.
 
@@ -5694,7 +5694,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### ShiftAssignment
 
-PostgreSQL table: `shift_assignments`. Source: `schema.zmodel:4015`. Extends `Base`.
+PostgreSQL table: `shift_assignments`. Source: `schema.zmodel:4019`. Extends `Base`.
 
 Purpose: Assigns a staff user to a shift for a date range.
 
@@ -5732,7 +5732,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### Attendance
 
-PostgreSQL table: `attendances`. Source: `schema.zmodel:4038`. Extends `Base`.
+PostgreSQL table: `attendances`. Source: `schema.zmodel:4042`. Extends `Base`.
 
 Purpose: Stores a staff member's attendance for a workday.
 
@@ -5773,7 +5773,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### AttendanceLog
 
-PostgreSQL table: `attendance_logs`. Source: `schema.zmodel:4065`. Extends `Base`.
+PostgreSQL table: `attendance_logs`. Source: `schema.zmodel:4069`. Extends `Base`.
 
 Purpose: Stores an attendance clock event.
 
@@ -5812,7 +5812,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### AttendanceAdjustment
 
-PostgreSQL table: `attendance_adjustments`. Source: `schema.zmodel:4089`. Extends `Base`.
+PostgreSQL table: `attendance_adjustments`. Source: `schema.zmodel:4093`. Extends `Base`.
 
 Purpose: Records a manual attendance correction.
 
@@ -5854,7 +5854,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### LeaveApplication
 
-PostgreSQL table: `leave_applications`. Source: `schema.zmodel:4115`. Extends `Base`.
+PostgreSQL table: `leave_applications`. Source: `schema.zmodel:4119`. Extends `Base`.
 
 Purpose: Records an employee leave request.
 
@@ -5899,7 +5899,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### SalaryConfig
 
-PostgreSQL table: `salary_configs`. Source: `schema.zmodel:4221`. Extends `Base`.
+PostgreSQL table: `salary_configs`. Source: `schema.zmodel:4225`. Extends `Base`.
 
 Purpose: Stores salary and commission terms for a staff member.
 
@@ -5938,7 +5938,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### PayrollAdjustment
 
-PostgreSQL table: `payroll_adjustments`. Source: `schema.zmodel:4245`. Extends `Base`.
+PostgreSQL table: `payroll_adjustments`. Source: `schema.zmodel:4249`. Extends `Base`.
 
 Purpose: Stores a manual addition or deduction in payroll.
 
@@ -5980,7 +5980,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### PayrollCycle
 
-PostgreSQL table: `payroll_cycles`. Source: `schema.zmodel:4271`. Extends `Base`.
+PostgreSQL table: `payroll_cycles`. Source: `schema.zmodel:4275`. Extends `Base`.
 
 Purpose: Groups a company's payroll calculation for a period.
 
@@ -6023,7 +6023,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### PayrollCycleLine
 
-PostgreSQL table: `payroll_cycle_lines`. Source: `schema.zmodel:4298`. Extends `Base`.
+PostgreSQL table: `payroll_cycle_lines`. Source: `schema.zmodel:4302`. Extends `Base`.
 
 Purpose: Stores the calculated pay for one staff member in a payroll cycle.
 
@@ -6073,7 +6073,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### SalaryPayment
 
-PostgreSQL table: `salary_payments`. Source: `schema.zmodel:4333`. Extends `Base`.
+PostgreSQL table: `salary_payments`. Source: `schema.zmodel:4337`. Extends `Base`.
 
 Purpose: Records a disbursement of salary.
 
@@ -6115,7 +6115,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### UserCreditTransaction
 
-PostgreSQL table: `user_credit_transactions`. Source: `schema.zmodel:4359`. Extends `Base`.
+PostgreSQL table: `user_credit_transactions`. Source: `schema.zmodel:4363`. Extends `Base`.
 
 Purpose: Legacy staff credit record retained for historical compatibility.
 
@@ -6157,7 +6157,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### ClientCredit
 
-PostgreSQL table: `client_credits`. Source: `schema.zmodel:4395`. Extends `Base`.
+PostgreSQL table: `client_credits`. Source: `schema.zmodel:4399`. Extends `Base`.
 
 Purpose: Records credit extended to a customer.
 
@@ -6195,7 +6195,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### UserLedgerEntry
 
-PostgreSQL table: `user_ledger_entries`. Source: `schema.zmodel:4417`. Extends `Base`.
+PostgreSQL table: `user_ledger_entries`. Source: `schema.zmodel:4421`. Extends `Base`.
 
 Purpose: Stores a complete staff ledger debit or credit.
 
@@ -6237,7 +6237,7 @@ Inherited attributes (declarations; consult ZenStack policy composition):
 
 ### StorefrontPage
 
-PostgreSQL table: `storefront_pages`. Source: `schema.zmodel:4444`.
+PostgreSQL table: `storefront_pages`. Source: `schema.zmodel:4448`.
 
 Purpose: Stores a configurable page for a company's storefront.
 
@@ -6266,7 +6266,7 @@ Declared constraints and policies:
 
 ### AiUsageEvent
 
-PostgreSQL table: `ai_usage_events`. Source: `schema.zmodel:4465`.
+PostgreSQL table: `ai_usage_events`. Source: `schema.zmodel:4469`.
 
 Purpose: Records AI feature usage for metering or audit.
 
@@ -6301,7 +6301,7 @@ Declared constraints and policies:
 
 ### StorefrontMemory
 
-PostgreSQL table: `storefront_memory`. Source: `schema.zmodel:4494`.
+PostgreSQL table: `storefront_memory`. Source: `schema.zmodel:4498`.
 
 Purpose: Stores persistent context for a storefront coding agent.
 
@@ -6325,7 +6325,7 @@ Declared constraints and policies:
 
 ### StorefrontAgentSession
 
-PostgreSQL table: `storefront_agent_sessions`. Source: `schema.zmodel:4517`.
+PostgreSQL table: `storefront_agent_sessions`. Source: `schema.zmodel:4521`.
 
 Purpose: Tracks a storefront coding-agent session.
 
@@ -6374,7 +6374,7 @@ Declared constraints and policies:
 
 ### StorefrontSource
 
-PostgreSQL table: `storefront_sources`. Source: `schema.zmodel:4557`.
+PostgreSQL table: `storefront_sources`. Source: `schema.zmodel:4561`.
 
 Purpose: Company-owned repository and hosting provider assignment with durable provisioning and deployment state.
 
@@ -6417,7 +6417,7 @@ Declared constraints and policies:
 
 ### AiProviderCredential
 
-PostgreSQL table: `ai_provider_credentials`. Source: `schema.zmodel:4590`.
+PostgreSQL table: `ai_provider_credentials`. Source: `schema.zmodel:4594`.
 
 Purpose: Stores company-specific AI provider credentials.
 
@@ -6447,7 +6447,7 @@ Declared constraints and policies:
 
 ### StorefrontDesignProfile
 
-PostgreSQL table: `storefront_design_profiles`. Source: `schema.zmodel:4608`.
+PostgreSQL table: `storefront_design_profiles`. Source: `schema.zmodel:4612`.
 
 Purpose: Stores reusable storefront brand and design settings.
 
@@ -6477,7 +6477,7 @@ Declared constraints and policies:
 
 ### EditSession
 
-PostgreSQL table: `edit_session`. Source: `schema.zmodel:4642`.
+PostgreSQL table: `edit_session`. Source: `schema.zmodel:4646`.
 
 Purpose: Groups a storefront editing session.
 
@@ -6510,7 +6510,7 @@ Declared constraints and policies:
 
 ### EditEnvironment
 
-PostgreSQL table: `edit_environment`. Source: `schema.zmodel:4664`.
+PostgreSQL table: `edit_environment`. Source: `schema.zmodel:4668`.
 
 Purpose: Tracks an editing runtime environment.
 
@@ -6546,7 +6546,7 @@ Declared constraints and policies:
 
 ### EditTurn
 
-PostgreSQL table: `edit_turn`. Source: `schema.zmodel:4689`.
+PostgreSQL table: `edit_turn`. Source: `schema.zmodel:4693`.
 
 Purpose: Records one agent editing turn.
 
@@ -6576,7 +6576,7 @@ Declared constraints and policies:
 
 ### EditSessionMessage
 
-PostgreSQL table: `edit_session_message`. Source: `schema.zmodel:4710`.
+PostgreSQL table: `edit_session_message`. Source: `schema.zmodel:4714`.
 
 Purpose: Stores a message associated with an editing session.
 
@@ -6603,7 +6603,7 @@ Declared constraints and policies:
 
 ### AccountantAccountingAccount
 
-PostgreSQL table: `accountant_v2_accounting_accounts`. Source: `schema.zmodel:4779`.
+PostgreSQL table: `accountant_v2_accounting_accounts`. Source: `schema.zmodel:4783`.
 
 Purpose: Independent Accountant books: categorized chart, parent hierarchy, bank metadata, status and dashboard flag. Stored separately from the existing finance system.
 
@@ -6651,7 +6651,7 @@ Declared constraints and policies:
 
 ### AccountantManualJournal
 
-PostgreSQL table: `accountant_v2_manual_journals`. Source: `schema.zmodel:4822`.
+PostgreSQL table: `accountant_v2_manual_journals`. Source: `schema.zmodel:4826`.
 
 Purpose: Independent Accountant books: draft/published journal header, source identity, reversal, creator and approval records. Stored separately from the existing finance system.
 
@@ -6700,7 +6700,7 @@ Declared constraints and policies:
 
 ### AccountantManualJournalLine
 
-PostgreSQL table: `accountant_v2_manual_journal_lines`. Source: `schema.zmodel:4859`.
+PostgreSQL table: `accountant_v2_manual_journal_lines`. Source: `schema.zmodel:4863`.
 
 Purpose: Independent Accountant books: debit/credit amounts linked to journal and account. Stored separately from the existing finance system.
 
@@ -6740,7 +6740,7 @@ Declared constraints and policies:
 
 ### AccountantJournalTemplate
 
-PostgreSQL table: `accountant_v2_journal_templates`. Source: `schema.zmodel:4887`.
+PostgreSQL table: `accountant_v2_journal_templates`. Source: `schema.zmodel:4891`.
 
 Purpose: Independent Accountant books: reusable JSON lines with amount/percentage mode. Stored separately from the existing finance system.
 
@@ -6775,7 +6775,7 @@ Declared constraints and policies:
 
 ### AccountantRecurringJournalProfile
 
-PostgreSQL table: `accountant_v2_recurring_journal_profiles`. Source: `schema.zmodel:4910`.
+PostgreSQL table: `accountant_v2_recurring_journal_profiles`. Source: `schema.zmodel:4914`.
 
 Purpose: Independent Accountant books: schedule, next run and child posting status. Stored separately from the existing finance system.
 
@@ -6816,7 +6816,7 @@ Declared constraints and policies:
 
 ### AccountantAccountingBudget
 
-PostgreSQL table: `accountant_v2_accounting_budgets`. Source: `schema.zmodel:4939`.
+PostgreSQL table: `accountant_v2_accounting_budgets`. Source: `schema.zmodel:4943`.
 
 Purpose: Independent Accountant books: fiscal-year JSON account allocations. Stored separately from the existing finance system.
 
@@ -6848,7 +6848,7 @@ Declared constraints and policies:
 
 ### AccountantTransactionLock
 
-PostgreSQL table: `accountant_v2_transaction_locks`. Source: `schema.zmodel:4959`.
+PostgreSQL table: `accountant_v2_transaction_locks`. Source: `schema.zmodel:4963`.
 
 Purpose: Independent Accountant books: cutoff, module, lock/unlock actor and reason. Stored separately from the existing finance system.
 
@@ -6881,7 +6881,7 @@ Declared constraints and policies:
 
 ### AccountantAccountOpeningBalance
 
-PostgreSQL table: `accountant_v2_account_opening_balances`. Source: `schema.zmodel:4980`.
+PostgreSQL table: `accountant_v2_account_opening_balances`. Source: `schema.zmodel:4984`.
 
 Purpose: Independent Accountant books: one opening record per company/account linked to the shared opening journal. Stored separately from the existing finance system.
 
@@ -6915,7 +6915,7 @@ Declared constraints and policies:
 
 ### AccountantFixedAssetCategory
 
-PostgreSQL table: `accountant_v2_fixed_asset_categories`. Source: `schema.zmodel:5002`.
+PostgreSQL table: `accountant_v2_fixed_asset_categories`. Source: `schema.zmodel:5006`.
 
 Purpose: Independent Accountant books: depreciation policy and asset/expense/accumulated accounts. Stored separately from the existing finance system.
 
@@ -6949,7 +6949,7 @@ Declared constraints and policies:
 
 ### AccountantFixedAsset
 
-PostgreSQL table: `accountant_v2_fixed_assets`. Source: `schema.zmodel:5024`.
+PostgreSQL table: `accountant_v2_fixed_assets`. Source: `schema.zmodel:5028`.
 
 Purpose: Independent Accountant books: acquisition metadata, carrying value, depreciation/disposal status. Stored separately from the existing finance system.
 
@@ -6992,7 +6992,7 @@ Declared constraints and policies:
 
 ### AccountantAssetDepreciation
 
-PostgreSQL table: `accountant_v2_asset_depreciations`. Source: `schema.zmodel:5055`.
+PostgreSQL table: `accountant_v2_asset_depreciations`. Source: `schema.zmodel:5059`.
 
 Purpose: Independent Accountant books: dated journal-linked depreciation history. Stored separately from the existing finance system.
 
@@ -7024,7 +7024,7 @@ Declared constraints and policies:
 
 ### AccountantAssetDisposal
 
-PostgreSQL table: `accountant_v2_asset_disposals`. Source: `schema.zmodel:5075`.
+PostgreSQL table: `accountant_v2_asset_disposals`. Source: `schema.zmodel:5079`.
 
 Purpose: Independent Accountant books: disposal proceeds, gain/loss and journal link. Stored separately from the existing finance system.
 
@@ -7057,7 +7057,7 @@ Declared constraints and policies:
 
 ### AccountantCurrencyAdjustment
 
-PostgreSQL table: `accountant_v2_currency_adjustments`. Source: `schema.zmodel:5096`.
+PostgreSQL table: `accountant_v2_currency_adjustments`. Source: `schema.zmodel:5100`.
 
 Purpose: Independent Accountant books: foreign/base balances, rate, adjustment status and journal. Stored separately from the existing finance system.
 
@@ -7097,7 +7097,7 @@ Declared constraints and policies:
 
 ### AccountantPreference
 
-PostgreSQL table: `accountant_v2_accountant_preferences`. Source: `schema.zmodel:5124`.
+PostgreSQL table: `accountant_v2_accountant_preferences`. Source: `schema.zmodel:5128`.
 
 Purpose: Independent Accountant books: one company preference record, fiscal start, approvals and gain/loss settings. Stored separately from the existing finance system.
 
@@ -7129,7 +7129,7 @@ Declared constraints and policies:
 
 ### AccountantClient
 
-PostgreSQL table: `accountant_v2_accountant_clients`. Source: `schema.zmodel:5144`.
+PostgreSQL table: `accountant_v2_accountant_clients`. Source: `schema.zmodel:5148`.
 
 Purpose: Independent Accountant books: new-book contact engagement metadata. Stored separately from the existing finance system.
 
@@ -7161,7 +7161,7 @@ Declared constraints and policies:
 
 ### AccountantAccountTransfer
 
-PostgreSQL table: `accountant_v2_account_transfers`. Source: `schema.zmodel:5164`.
+PostgreSQL table: `accountant_v2_account_transfers`. Source: `schema.zmodel:5168`.
 
 Purpose: Independent Accountant books: movement between new cash/bank/card/clearing accounts. Stored separately from the existing finance system.
 
@@ -7198,7 +7198,7 @@ Declared constraints and policies:
 
 ### AccountantDistributorSettings
 
-PostgreSQL table: `accountant_v2_distributor_settings`. Source: `schema.zmodel:5190`.
+PostgreSQL table: `accountant_v2_distributor_settings`. Source: `schema.zmodel:5194`.
 
 Purpose: Company-specific distributor connection to the new Accountant books and vendor contact.
 
@@ -7227,7 +7227,7 @@ Declared constraints and policies:
 
 ### AccountantDistributorMapping
 
-PostgreSQL table: `accountant_v2_distributor_mappings`. Source: `schema.zmodel:5206`.
+PostgreSQL table: `accountant_v2_distributor_mappings`. Source: `schema.zmodel:5210`.
 
 Purpose: Selects the general-ledger account used for one distributor posting role.
 
@@ -7252,7 +7252,7 @@ Declared constraints and policies:
 
 ### AccountantDistributorSource
 
-PostgreSQL table: `accountant_v2_distributor_sources`. Source: `schema.zmodel:5218`.
+PostgreSQL table: `accountant_v2_distributor_sources`. Source: `schema.zmodel:5222`.
 
 Purpose: Idempotent snapshot and revision of a distributor source posting; retained after deletion for reversal history.
 
@@ -7282,7 +7282,7 @@ Declared constraints and policies:
 
 ### AccountantInvestor
 
-PostgreSQL table: `accountant_v2_investors`. Source: `schema.zmodel:5240`.
+PostgreSQL table: `accountant_v2_investors`. Source: `schema.zmodel:5244`.
 
 Purpose: Company investor profile linked to a company user and existing capital, profit-payable and loan chart account mappings; creation can atomically include its initial agreement.
 
@@ -7314,7 +7314,7 @@ Declared constraints and policies:
 
 ### AccountantInvestorTerm
 
-PostgreSQL table: `accountant_v2_investor_terms`. Source: `schema.zmodel:5269`.
+PostgreSQL table: `accountant_v2_investor_terms`. Source: `schema.zmodel:5273`.
 
 Purpose: Internal effective-dated ownership/profit snapshot generated from profile percentages or individually priced share transactions. Historical agreement rows are preserved.
 
@@ -7340,7 +7340,7 @@ Declared constraints and policies:
 
 ### AccountantInvestorEvent
 
-PostgreSQL table: `accountant_v2_investor_events`. Source: `schema.zmodel:5288`.
+PostgreSQL table: `accountant_v2_investor_events`. Source: `schema.zmodel:5292`.
 
 Purpose: Immutable investor cash/allocation movement, noncash share trade or retained pending legacy snapshot. Confirmed share payments link to their original trade.
 
@@ -7375,7 +7375,7 @@ Declared constraints and policies:
 
 ### AccountantLoan
 
-PostgreSQL table: `accountant_v2_loans`. Source: `schema.zmodel:5324`.
+PostgreSQL table: `accountant_v2_loans`. Source: `schema.zmodel:5328`.
 
 Purpose: Company-owned investor borrowing agreement recorded and opened on save, with frozen terms, account mappings and repayment schedule.
 
@@ -7409,7 +7409,7 @@ Declared constraints and policies:
 
 ### AccountantLoanEvent
 
-PostgreSQL table: `accountant_v2_loan_events`. Source: `schema.zmodel:5345`.
+PostgreSQL table: `accountant_v2_loan_events`. Source: `schema.zmodel:5349`.
 
 Purpose: Immutable loan source event linked to a balanced system journal; scheduled principal is distinct from actual repayment.
 
@@ -7442,7 +7442,7 @@ Declared constraints and policies:
 
 ### AccountantContact
 
-PostgreSQL table: `accountant_v2_accountant_contact`. Source: `schema.zmodel:5365`.
+PostgreSQL table: `accountant_v2_accountant_contact`. Source: `schema.zmodel:5369`.
 
 Purpose: Independent Accountant books: independent client/vendor/other directory. Stored separately from the existing finance system.
 
@@ -7473,7 +7473,7 @@ Declared constraints and policies:
 
 ### AccountantProject
 
-PostgreSQL table: `accountant_v2_accountant_project`. Source: `schema.zmodel:5383`.
+PostgreSQL table: `accountant_v2_accountant_project`. Source: `schema.zmodel:5387`.
 
 Purpose: Independent Accountant books: independent journal project directory. Stored separately from the existing finance system.
 
@@ -7500,7 +7500,7 @@ Declared constraints and policies:
 
 ### AccountantAudit
 
-PostgreSQL table: `accountant_v2_accountant_audit`. Source: `schema.zmodel:5397`.
+PostgreSQL table: `accountant_v2_accountant_audit`. Source: `schema.zmodel:5401`.
 
 Purpose: Independent Accountant books: API actor, action, resource and metadata. Stored separately from the existing finance system.
 
@@ -7530,7 +7530,7 @@ Declared constraints and policies:
 
 ### AccountantEcommerceSettings
 
-PostgreSQL table: `accountant_v2_ecommerce_settings`. Source: `schema.zmodel:5414`.
+PostgreSQL table: `accountant_v2_ecommerce_settings`. Source: `schema.zmodel:5418`.
 
 Purpose: Opt-in company ecommerce posting connection for new orders; account roles, activation time and exclusion baseline prevent accidental historical posting.
 
@@ -7553,7 +7553,7 @@ Declared constraints and policies:
 
 ### AccountantErpSettings
 
-PostgreSQL table: `accountant_v2_erp_settings`. Source: `schema.zmodel:5424`.
+PostgreSQL table: `accountant_v2_erp_settings`. Source: `schema.zmodel:5428`.
 
 Purpose: Company-level ERP posting activation and default account-role selections.
 
@@ -7576,7 +7576,7 @@ Declared constraints and policies:
 
 ### AccountantErpSource
 
-PostgreSQL table: `accountant_v2_erp_sources`. Source: `schema.zmodel:5433`.
+PostgreSQL table: `accountant_v2_erp_sources`. Source: `schema.zmodel:5437`.
 
 Purpose: ERP source posting snapshots and excluded history baseline; supports idempotent reversals and replacement journals.
 
@@ -7602,7 +7602,7 @@ Declared constraints and policies:
 
 ### AccountantStockControl
 
-PostgreSQL table: `accountant_v2_stock_control`. Source: `schema.zmodel:5447`.
+PostgreSQL table: `accountant_v2_stock_control`. Source: `schema.zmodel:5451`.
 
 Purpose: Opt-in company inventory control that reconciles posted Stock to current product quantities and purchase costs.
 
@@ -7630,7 +7630,7 @@ Declared constraints and policies:
 
 ### AccountantUserSettings
 
-PostgreSQL table: `accountant_v2_user_settings`. Source: `schema.zmodel:5462`.
+PostgreSQL table: `accountant_v2_user_settings`. Source: `schema.zmodel:5466`.
 
 Purpose: Company account choices and activation for new salary and staff-credit postings.
 
@@ -7653,7 +7653,7 @@ Declared constraints and policies:
 
 ### AccountantUserSource
 
-PostgreSQL table: `accountant_v2_user_sources`. Source: `schema.zmodel:5471`.
+PostgreSQL table: `accountant_v2_user_sources`. Source: `schema.zmodel:5475`.
 
 Purpose: Stable staff source identity, frozen account choices and current double-entry journal, including excluded historical baselines.
 

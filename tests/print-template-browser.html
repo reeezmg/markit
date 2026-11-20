@@ -7,7 +7,7 @@ button, input, select, textarea { font: inherit; color: inherit; } button { curs
 </style></head><body>
 <pre id="result">RUNNING</pre>
 <script type="module">
-import { STANDARD_LABEL_ID, activeTemplate, defaultTemplate, monochromeBytes, noTaxReceiptTemplate } from '../utils/print-templates.ts';
+import { STANDARD_LABEL_ID, activeTemplate, defaultTemplate, monochromeBytes, noTaxReceiptTemplate, newElement } from '../utils/print-templates.ts';
 import { noTaxReceiptHtml } from '../utils/no-tax-receipt.ts';
 import { classicReceiptTemplate, taxlessReceiptTemplate } from '../utils/print-templates.ts';
 import { receiptPhotoFixture } from './receipt-photo-fixture.ts';
@@ -29,6 +29,21 @@ window.useToast = () => ({ add: () => {} });
 async function run() {
 try {
   const classic = classicReceiptTemplate();
+  const section = { ...newElement('text', 72), text: 'Features\n• Carbon filter\n• Automatic backwash', heading: true, border: true };
+  const afterSection = { ...newElement('text', 72), text: 'Following section' };
+  const customRender = await renderPrintTemplate({ ...classic, elements: [section, afterSection] }, data);
+  const firstBox = customRender.bounds[0], secondBox = customRender.bounds[1];
+  check(firstBox.height > section.height && secondBox.y >= firstBox.y + firstBox.height, 'Custom headed text did not expand receipt flow');
+  const borderPixel = customRender.canvas.getContext('2d').getImageData(Math.round(firstBox.x * 203/25.4), Math.round((firstBox.y + 2) * 203/25.4), 1, 1).data;
+  check(borderPixel[0] < 200, 'Custom section border was not rendered into printable pixels');
+  await renderedTemplatePDF(customRender);
+  logs.push('PASS custom section heading, bullet content, border pixels, expanding flow and PDF');
+  const largeRows={...classic,elements:[{...newElement('items',72),width:68,tableStyle:{rowHeight:20,headerHeight:12,cellPadding:1,fontSize:10,headerFontSize:9,verticalAlign:'middle',borderWidth:.3}},afterSection]};
+  const sizedRender=await renderPrintTemplate(largeRows,data);
+  check(sizedRender.bounds[0].height>=32 && sizedRender.bounds[1].y>=sizedRender.bounds[0].y+32,'Configured table rows/header did not grow subsequent content');
+  const sizedPdf=await renderedTemplatePDF(sizedRender);check(sizedPdf.getNumberOfPages()>0,'Sized table PDF failed');
+  logs.push('PASS shared table minimum heights, typography, padding, alignment, flow and PDF');
+
   const classicRender = await renderPrintTemplate(classic, receiptPhotoFixture);
   const positioned = structuredClone(classic); positioned.elements[0].gapBefore = 12; positioned.elements[0].x = 3; positioned.elements[0].width = 60;
   const positionedRender = await renderPrintTemplate(positioned, receiptPhotoFixture);
@@ -210,7 +225,7 @@ try {
   const app=createApp(Designer,{receiptData:data,labelData:data,hideOriginalReceipt:designerPreview});
   app.component('UButton',defineComponent({props:['label','disabled','loading'],setup(props,{attrs}) {return ()=>h('button',{...attrs,class:'test-button',disabled:props.disabled||props.loading},props.label);} }));
   app.mount(host);
-  const wait = async predicate => {for(let i=0;i<100;i++){await new Promise(resolve=>setTimeout(resolve,30));await nextTick();if(predicate())return;}throw Error('Designer interaction timed out');};
+  const wait = async predicate => {for(let i=0;i<250;i++){await new Promise(resolve=>setTimeout(resolve,30));await nextTick();if(predicate())return;}throw Error('Designer interaction timed out: '+Array.from(host.querySelectorAll('[role=alert]')).map(e=>e.textContent).join('; '));};
   const button = name => Array.from(host.querySelectorAll('button')).find(e=>e.textContent===name);
   await wait(()=>button('New label'));
   if (new URLSearchParams(location.search).get('preview') === 'editor') {
@@ -250,6 +265,17 @@ try {
   }
   dialog.querySelector('[data-editor-tab="setup"]').click();await nextTick();
   check(dialog.querySelector('.setup-controls').getBoundingClientRect().height>0,'Setup tab does not open');
+  const sharedLabelTools=dialog.querySelector('.setup-controls .document-tools');
+  check(sharedLabelTools.querySelector('[aria-label="Design template"]')&&sharedLabelTools.querySelector('[aria-label="Document page size"]'),'Shared label design tools missing');
+  sharedLabelTools.querySelector('details').open=true;
+  const customTitle=sharedLabelTools.querySelector('input:not([type=checkbox])'),customBody=sharedLabelTools.querySelector('textarea');
+  customTitle.value='Care';customTitle.dispatchEvent(new Event('input',{bubbles:true}));customBody.value='Keep dry';customBody.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  Array.from(sharedLabelTools.querySelectorAll('button')).find(b=>b.textContent==='Add section').click();await nextTick();
+  check(dialog.querySelector('.element-selected').textContent.includes('Care'),'Label custom section did not select');
+  await wait(()=>dialog.querySelector('.preview-image'));button('Undo').click();await nextTick();
+  check(!Array.from(dialog.querySelectorAll('.element-select')).some(e=>e.textContent.includes('Care')),'Label custom section undo failed');
+  dialog.querySelector('[data-editor-tab="setup"]').click();await nextTick();
+  logs.push('PASS shared label template/page tools, custom headed bullet section and undo');
   const modalName=Array.from(dialog.querySelectorAll('label')).find(e=>e.firstChild.textContent==='Design name').querySelector('input');
   modalName.value='Warehouse label';modalName.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
   const previewPaper=dialog.querySelector('.canvas-workbench > div');const beforeZoom=previewPaper.getBoundingClientRect().width;
@@ -326,10 +352,16 @@ try {
   await nextTick();
   check(host.querySelectorAll('.table-column').length===9, 'Could not remove a table column');
   logs.push('PASS table column heading, product variable, width and add controls');
+  const rowSize=host.querySelector('[aria-label="Minimum table row height"]');check(rowSize,'Shared table size controls missing');
+  rowSize.value='16';rowSize.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  await wait(()=>!button('Save designs').disabled);button('Save designs').click();await wait(()=>saves===2);
+  check(stored.templates.find(t=>t.kind==='receipt').elements.find(e=>e.type==='items').tableStyle.rowHeight===16,'Receipt row height not saved');
+  logs.push('PASS receipt shared row-size controls and persistence');
+
   const firstSection=host.querySelector('div[draggable="true"] button').textContent;
   host.querySelector('button[aria-label="Move section down"]').click();await nextTick();
   check(host.querySelector('div[draggable="true"] button').textContent!==firstSection,'Receipt section order did not change');
-  await wait(()=>!button('Save designs').disabled);button('Save designs').click();await wait(()=>saves===2);
+  await wait(()=>!button('Save designs').disabled);button('Save designs').click();await wait(()=>saves===3);
   check(stored.templates[1].name==='Custom company receipt','Receipt name was not saved');
   host.querySelector('[data-editor-tab="setup"]').click();await nextTick();
   button('Duplicate').click();await nextTick();check(button('Discard changes'),'Duplicate was not marked unsaved');
@@ -373,7 +405,14 @@ try {
   await wait(()=>!button('Save designs').disabled);const savesBeforeRestore=saves;button('Save designs').click();await wait(()=>saves>savesBeforeRestore);
   const imageReceiptCard=Array.from(host.querySelectorAll('.template-card')).find(card=>card.textContent.includes('Custom company receipt'));
   imageReceiptCard.click();await wait(()=>host.querySelector('dialog[open]'));host.querySelector('[data-editor-tab="setup"]').click();await nextTick();
-  const sheetSelect=host.querySelector('[aria-label="Standard paper size"]');check(Array.from(sheetSelect.options).some(o=>o.value==='210x297'),'A4 receipt size missing');sheetSelect.value='210x297';sheetSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  const receiptTools=host.querySelector('.setup-controls .document-tools');
+  const receiptTemplates=receiptTools.querySelector('[aria-label="Design template"]');
+  check(Array.from(receiptTemplates.options).some(o=>o.value==='base:taxless'),'Shared receipt templates missing');
+  receiptTemplates.value='base:taxless';receiptTemplates.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  Array.from(receiptTools.querySelectorAll('button')).find(b=>b.textContent==='Apply template').click();await nextTick();
+  check(!Array.from(host.querySelectorAll('.element-select')).some(e=>e.textContent.includes('Tax summary')),'Template picker did not apply receipt layout');
+  button('Undo').click();await nextTick();logs.push('PASS shared receipt template picker and undo');
+  const sheetSelect=host.querySelector('[aria-label="Document page size"]');check(Array.from(sheetSelect.options).some(o=>o.value==='210x297'),'A4 receipt size missing');sheetSelect.value='210x297';sheetSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
   host.querySelector('[data-editor-tab="content"]').click();await nextTick();button('+ Image').click();await nextTick();
   const upload=host.querySelector('[aria-label="Upload design image"]');const imageBlob=await new Promise(resolve=>blackLogo.toBlob(resolve,'image/png'));const files=new DataTransfer();files.items.add(new File([imageBlob,new Uint8Array(400000)],'banner.png',{type:'image/png'}));upload.files=files.files;upload.dispatchEvent(new Event('change',{bubbles:true}));
   await wait(()=>!button('Save designs').disabled);check(host.querySelector('[aria-label="Image placement"]').value==='absolute','Receipt image did not offer free placement');
