@@ -7,6 +7,7 @@ const afterSales = useAfterSalesFeature(companyScope.companyId, $fetch);
 
 import { v4 as uuidv4 } from 'uuid';
 import { billingErrorMessage } from '~/utils/billing-error';
+import { billingBarcodeShortcut } from '~/utils/billing-barcode';
 import { billSaveActionIcon, billSaveActionIcons } from '~/utils/bill-save-action-icon';
 import '~/assets/css/billing-layout.css';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -19,6 +20,7 @@ import { Capacitor } from '@capacitor/core';
 import { invoiceDetails } from '~/utils/invoice-flow';
 import { billTotal, billDiscountValue, billAdjustmentValue, splitBillDiscount } from '~/utils/bill-adjustments';
 import BillingDiscountAdjustment from '~/components/Billing/DiscountAdjustment.vue';
+import BillingInlineProductSearch from '~/components/Billing/InlineProductSearch.vue';
 import BillingPaymentTerms from '~/components/Billing/PaymentTerms.vue';
 import { receiptEntryAmounts, receiptEntryTotals } from '~/utils/receipt-entry-amounts';
 const queryClient = useQueryClient();
@@ -916,7 +918,13 @@ const fetchEntriesToDelete = async () => {
 
 
 const handleEnterBarcode = (barcode,index) => {
- const pattern = /^\d+[A-Z]\d{6}$/;
+ const pattern = /^\d+[A-Z]+\d{6}$/;
+ let shortcut = null;
+ try { shortcut = billingBarcodeShortcut(barcode); }
+ catch (error) {
+   toast.add({ title: 'Invalid barcode shortcut', description: error.message, color: 'red' });
+   return;
+ }
   if(!barcode){
     
     const component = discountref.value;
@@ -925,7 +933,7 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
     
   }else{
-    if(!pattern.test(barcode)){
+    if(!pattern.test(barcode) && shortcut === null){
       const resolved = categoryStore.resolveShortCut(barcode)
       if (resolved?.category) {
         items.value[index].category = categories.value.filter(c => c.id === resolved.category.id)
@@ -1038,6 +1046,7 @@ const processItemResponse = (itemData, index) => {
   const categoryId = itemData.variant.product.categoryId
 
   items.value[index].id = itemData.id ?? ''
+  items.value[index].barcode = itemData.barcode ?? items.value[index].barcode
   items.value[index].size = itemData.size ?? ''
   items.value[index].cost = itemData.variant?.pprice ?? 0
 
@@ -1076,7 +1085,9 @@ const handleProductSelected = async (selectedItems) => {
   for (const item of selectedItems || []) {
     if (!item.barcode) continue
     await addNewRow(items.value.length - 1, false)
-    const index = items.value.length - 1
+    const index = items.value.findIndex(row =>
+      !row.variantId?.trim() && !row.name?.trim() && !row.barcode?.trim() && !row.category?.length && row.qty > 0
+    )
     items.value[index].barcode = item.barcode
     await fetchItemData(item.barcode, index)
     await addNewRow(index, false)
@@ -2229,6 +2240,12 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
               @blur="updateParentUserDetails(parentUserCode)"
               :disabled="bill?.isMarkit"
+            />
+            <BillingInlineProductSearch
+              :key="bill?.id"
+              class="order-last w-full lg:order-none lg:flex-1 lg:basis-72 lg:max-w-xl"
+              :disabled="isSaving || dataLoading || bill?.isMarkit"
+              @selected="handleProductSelected([$event])"
             />
           <div class="ml-auto flex items-center gap-2">
             <UButton v-if="afterSales.enabled.value" icon="i-heroicons-shield-check" color="gray" variant="ghost" square title="Registered units" aria-label="Registered units" :disabled="isSaving || bill?.isMarkit" @click="isServiceUnitsOpen = true" />

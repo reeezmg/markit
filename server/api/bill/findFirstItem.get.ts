@@ -1,6 +1,7 @@
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { billingBarcodeShortcut } from '~/utils/billing-barcode'
 
 export default defineEventHandler(async (event) => {
   /* -------------------------------
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
      QUERY
   -------------------------------- */
   const query = getQuery(event)
-  const barcode = query.barcode
+  let barcode = query.barcode
 
   if (!barcode) {
     throw createError({
@@ -29,13 +30,36 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  let shortcut: string | null
+  try { shortcut = billingBarcodeShortcut(barcode) }
+  catch (error) {
+    throw createError({ statusCode: 400, statusMessage: (error as Error).message })
+  }
+
   const client = await pool.connect()
 
   try {
+    if (shortcut !== null) {
+      const matches = await client.query<{ barcode: string }>(
+        `SELECT DISTINCT i.barcode
+         FROM items i
+         INNER JOIN companies company ON company.id = i.company_id
+         WHERE i.company_id = $1
+           AND i.barcode ~ ('^' || company.storecode::text || '[A-Z]+' || $2 || '$')
+         LIMIT 2`,
+        [companyId, shortcut]
+      )
+      if (!matches.rows.length) return null
+      if (matches.rows.length > 1) {
+        throw createError({ statusCode: 409, statusMessage: 'More than one barcode matches this shortcut. Enter the full barcode.' })
+      }
+      barcode = matches.rows[0].barcode
+    }
     const res = await client.query(
       `
       SELECT
         i.id                     AS item_id,
+        i.barcode,
         i.size,
         i.qty,
 
@@ -84,6 +108,7 @@ export default defineEventHandler(async (event) => {
     -------------------------------- */
     return {
       id: r.item_id,
+      barcode: r.barcode,
       size: r.size,
       qty: r.qty,
 

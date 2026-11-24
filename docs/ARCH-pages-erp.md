@@ -160,6 +160,7 @@ Head-office admins default to the active head office plus active direct branches
 - `pages/erp/edit/[salesId].vue` — Edit an existing bill
 - `components/Billing/AddClient.vue` — Shared add/link client modal (also used in /client)
 - `components/Billing/ProductSearch.vue` — Product search modal for adding items to bill
+- `components/Billing/InlineProductSearch.vue` — Inline quote-style product suggestions beside the toolbar staff-code input on billing and bill edit
 - `components/Billing/SalesReturn.vue` — Sales return modal
 - `components/Billing/StockReturn.vue` — Stock return modal
 - `components/Billing/AccountModal.vue` — B2B account creation modal (extracted from billing.vue)
@@ -187,8 +188,8 @@ Head-office admins default to the active head office plus active direct branches
 | `/api/bill/findManyCoupon` | GET | Prisma | List applicable coupons |
 | `/api/bill/findManyAccount` | GET | Raw SQL | List credit accounts; with `includeUsers=true`, returns account/user selector options for POS credit billing |
 | `/api/bill/createAccount` | POST | Prisma | Create a new credit account |
-| `/api/bill/findFirstItem` | GET | Raw SQL (pg pool) | Fetch item by barcode for billing, including zero/negative stock items |
-| `/api/bill/searchItems` | GET | Raw SQL (pg pool) | Quote product suggestions from the selected company: `q`, `field` (all/barcode/product/variant/brand/category/subcategory/collection), and `limit`. All includes each supported field; specific fields restrict matching. Returns in-stock active product/variant rows with tax, brand and collection metadata. |
+| `/api/bill/findFirstItem` | GET | Raw SQL (pg pool) | Fetch item by full barcode or numeric slash shortcut for billing/edit, returning the resolved full barcode and including zero/negative stock items. Shortcuts resolve only the selected company's storecode and reject ambiguous prefixes. |
+| `/api/bill/searchItems` | GET | Raw SQL (pg pool) | Quote and billing/edit product suggestions from the selected company: `q`, `field` (all/barcode/product/variant/brand/category/subcategory/collection), and `limit`. All includes each supported field; specific fields restrict matching. Returns in-stock active product/variant rows with tax, brand and collection metadata. |
 | `/api/bill/redeemClientPoints` | POST | Raw SQL (pg pool) | Redeem or revert loyalty points |
 | `/api/bill/by-barcode` | GET | — | Lookup by barcode (not read) |
 | `/api/billSale/findManyBills` | POST | Raw SQL (pg pool) | Paginated bill list for sales page. Supports: `selectedPaymentMethods[]`, `minGrandTotal`, `maxGrandTotal` filters. Reads `cleanup` from session and the cleanup-only `showCleanedValues` body flag: normal users always exclude soft-deleted bills (`precedence IS NOT TRUE`); cleanup users with the toggle off see original cleanup values plus `precedence=true` rows; cleanup users with the toggle on see current cleaned values and exclude `precedence=true` rows. Returns `b.precedence` in SELECT. |
@@ -439,6 +440,7 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 
 **Keyboard navigation flow:**
 - Barcode field → Enter (with valid barcode) → auto-fetch item + add new row, focus next barcode
+- Barcode field → `/` plus 1–6 digits → Enter resolves the saved barcode for the selected company, padding the numeric part to six digits (`/123` → `1A000123` when that is the matching code). The lookup uses that company's `storecode` and the saved letter prefix, including multiple letters. Distinct matching prefixes require the full barcode; malformed shortcuts retain the input and show a validation message. Billing and bill edit replace the abbreviation with the returned full barcode before saving.
 - Barcode field → Enter (empty) → jump to main discount field
 - Barcode field → Enter (non-barcode text) → treat as category shortcut (lookup via `categoryStore.getCategoryByShortCut()`)
 - Main discount → Enter → adjustment → Enter → payment method
@@ -446,6 +448,8 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 - Shift+Enter → focus phone number field
 
 **Barcode format:** `/^\d+[A-Z]\d{6}$/` — Capacitor scanner enforces this; Quagga2 accepts any CODE_128/EAN
+
+Manual barcode entry on billing/edit additionally accepts multi-letter prefixes (`/^\d+[A-Z]+\d{6}$/`) and the numeric slash shortcut above. Native scanner validation is unchanged.
 
 **Barcode scanning (useBillingCamera):**
 - Web: Quagga2 (`code_128_reader`, `ean_reader`, `ean_8_reader`) with rear camera (`environment`)
@@ -539,6 +543,13 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 - After a successful create, the new `billId` is stored in localStorage under `markit_recent_bill_id`; the billing-page dropdown action `Recent Bill` and `F2` both open `/erp/edit/<recentBillId>`.
 
 **FCM push notification:** Fired non-blocking after save → `/api/notifyfcm` notifies other devices of new bill.
+
+**Inline product search (`components/Billing/InlineProductSearch.vue`):**
+- Billing and bill edit place the shared field selector and search input immediately after the optional parent user-code input on desktop; mobile wraps the search onto its own toolbar row.
+- Reuses the quote search field options and company-scoped `/api/bill/searchItems` endpoint, with a 250 ms debounce and five in-stock suggestions. Results show product/variant name, barcode, size, price and brand/category/collection metadata. Enter selects a sole match; Escape clears, and leaving the control hides suggestions.
+- The field preference persists across billing/edit in `erp:billing-product-search-field:v1`, separately from quote preferences and document data. Field/company changes, disabling and unmounting invalidate pending responses.
+- Selection runs the existing barcode item lookup and row tax/pricing logic. Empty rows are reused, existing filled/saved rows remain intact, and a blank row is retained. Saving disables the control; bill edit also respects the marketplace-bill lock.
+- Billing resets the search when switching drafts. The existing footer Search button still opens the product browser below.
 
 **ProductSearch modal (`components/Billing/ProductSearch.vue`):**
 - Category → subcategory → product drill-down (all optional — category alone loads variants)
@@ -983,7 +994,7 @@ Sales and online-sales selected columns compare stable column keys, so recreated
 - Resolves the bill's owning company, then loads its category options before assigning the bill to the form watcher; saved entry categories are matched by ID during row initialization.
 - Same UI as billing.vue (barcode rows, camera scanning, keyboard nav, tax calc, split payments, skip points toggle, separate Discount/Adjustment inputs); the table shows `unit` next to `qty` only when multiple billing units are enabled in settings
 - After-sales registration uses the shared `BillingSerialNumbers` icon beside Delete on desktop and mobile, with staged serial/delivery/installation fields and exact return selection. The old registration panels are absent from the header. A shield icon in the toolbar opens registered-unit history/removal controls; changes to existing unit details still use service history. All service controls require the owning company's after-sales setting. Save waits for the shared registration lookup before validation.
-- The responsive toolbar groups date, optional staff code, the saved bill/invoice identifier, Add item and Notes menu; it has no separate menu row. Invoice edit places Payment terms and Due date below the totals on desktop, above Delete/Return, and uses the shared invoice-details section on mobile without duplicating Subject. Subject remains bound to the saved invoice reference in the Qty footer row. The card is inert while saving, and marketplace bills retain their disabled controls.
+- The responsive toolbar groups date, optional staff code, inline product search, the saved bill/invoice identifier, Add item and Notes menu; search wraps onto its own row on mobile. Invoice edit places Payment terms and Due date below the totals on desktop, above Delete/Return, and uses the shared invoice-details section on mobile without duplicating Subject. Subject remains bound to the saved invoice reference in the Qty footer row. The card is inert while saving, and marketplace bills retain their disabled controls.
 - Linked service invoices identify their non-stock charge rows on load. These retain the service's tax and tax-inclusive rate rather than adopting category tax or adding tax again in tax-exclusive companies. A missing legacy charge category uses the company's automatic Service Charges category when available, persisted only on explicit save; product rows retain their own category/tax behavior.
 - The Account Name selector mirrors billing.vue: existing `accountId` values load as `account:<id>`, staff-credit `creditUserId` values load as `user:<id>`, and save back into separate bill columns.
 - User tracking parity with billing: supports top-level user code input (near date); applying it updates all existing rows and pre-fills newly added rows

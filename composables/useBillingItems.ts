@@ -152,6 +152,7 @@ export function useBillingItems(
     const categoryId = itemData.variant.product.categoryId
 
     items.value[index].id = itemData.id ?? ''
+    items.value[index].barcode = itemData.barcode ?? items.value[index].barcode
     items.value[index].size = itemData.size ?? ''
     items.value[index].unit = itemData.variant?.unit ?? 'Nos'
     items.value[index].cost = itemData.variant?.pprice ?? 0
@@ -206,10 +207,13 @@ export function useBillingItems(
     for (const item of selectedItems) {
       const barcode = item.barcode
       if (!barcode) continue
-      const index = items.value.length - 1
+      await addNewRow(items.value.length - 1, false)
+      const index = items.value.findIndex((row: any) =>
+        !row.variantId?.trim() && !row.name?.trim() && !row.barcode?.trim() && !row.category?.length && row.qty > 0
+      )
       items.value[index].barcode = barcode
       await fetchItemData(barcode, index)
-      addNewRow(index, true)
+      await addNewRow(index, true)
     }
   }
 

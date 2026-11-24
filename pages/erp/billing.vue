@@ -10,7 +10,9 @@ const afterSalesEnabled = computed(() => salesWorkflow.preferences.value.include
 import { BillingAddClient } from '#components';
 import BillingPaymentTerms from '~/components/Billing/PaymentTerms.vue';
 import BillingDiscountAdjustment from '~/components/Billing/DiscountAdjustment.vue';
+import BillingInlineProductSearch from '~/components/Billing/InlineProductSearch.vue';
 import { billingErrorMessage } from '~/utils/billing-error';
+import { billingBarcodeShortcut } from '~/utils/billing-barcode';
 import { billSaveActionIcon, billSaveActionIcons } from '~/utils/bill-save-action-icon';
 import '~/assets/css/billing-layout.css';
 import { v4 as uuidv4 } from 'uuid';
@@ -472,7 +474,13 @@ onMounted(async() => {
 
 
 const handleEnterBarcode = (barcode,index) => {
- const pattern = /^\d+[A-Z]\d{6}$/;
+ const pattern = /^\d+[A-Z]+\d{6}$/;
+ let shortcut = null;
+ try { shortcut = billingBarcodeShortcut(barcode); }
+ catch (error) {
+   toast.add({ title: 'Invalid barcode shortcut', description: error.message, color: 'red' });
+   return;
+ }
 
   if(!barcode){
     const component = discountref.value;
@@ -480,7 +488,7 @@ const handleEnterBarcode = (barcode,index) => {
     input.focus();
     input.select();
   }else{
-    if(!pattern.test(barcode)){
+    if(!pattern.test(barcode) && shortcut === null){
       const resolved = categoryStore.resolveShortCut(barcode)
       if (resolved?.category) {
         items.value[index].category = categories.value.filter(c => c.id === resolved.category.id)
@@ -1343,10 +1351,17 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
               @blur="updateParentUserDetails(parentUserCode)"
             />
+            <BillingInlineProductSearch
+              v-if="isMobile"
+              :key="billNo"
+              class="order-last w-full"
+              :disabled="isSaving"
+              @selected="handleProductSelected([$event])"
+            />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-       <div class="billing-topbar hidden lg:flex items-end gap-2 text-sm py-2 px-2">
+       <div class="billing-topbar hidden lg:flex flex-wrap items-end gap-2 text-sm py-2 px-2">
           <UInput
             v-model="dateInput"
             type="date"
@@ -1364,6 +1379,13 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
             class="w-40"
             @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
             @blur="updateParentUserDetails(parentUserCode)"
+          />
+          <BillingInlineProductSearch
+            v-if="!isMobile"
+            :key="billNo"
+            class="min-w-0 flex-1 basis-72 max-w-xl"
+            :disabled="isSaving"
+            @selected="handleProductSelected([$event])"
           />
   
   <!-- Draft and toolbar actions -->

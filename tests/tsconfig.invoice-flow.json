@@ -8,6 +8,7 @@
     "../components/Billing/InvoiceDetails.vue", "../components/Billing/InvoiceWorkspace.vue",
     "../components/Billing/PaymentTerms.vue", "../utils/invoice-payment-terms.ts", "../server/utils/invoice-payment-terms.ts",
     "../components/Billing/DiscountAdjustment.vue", "../utils/bill-adjustments.ts",
+    "../components/Billing/InlineProductSearch.vue",
     "../components/Billing/Preferences.vue", "../utils/billing-preferences.ts", "../server/utils/billing-preferences.ts",
     "../server/api/settings/billing-preferences.get.ts", "../server/api/settings/billing-preferences.put.ts",
     "../server/api/settings/payment-terms.get.ts", "../server/api/settings/payment-terms.post.ts",

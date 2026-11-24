@@ -7,6 +7,7 @@ import * as Vue from 'vue'
 import * as dates from '../../composables/date'
 import { companyStorageKey } from '../../utils/companyStorageKey'
 import { billingErrorMessage } from '../../utils/billing-error'
+import { billingBarcodeShortcut } from '../../utils/billing-barcode'
 import { invoiceDetails } from '../../utils/invoice-flow'
 import * as billAdjustments from '../../utils/bill-adjustments'
 import * as receiptAmounts from '../../utils/receipt-entry-amounts'
@@ -29,7 +30,7 @@ export function harness(file: string, names?: string[], overrides: Record<string
   const storage = new Map<string, string>()
   const scope = Vue.effectScope()
   const context: any = {
-    ...Vue, ...dates, ...billAdjustments, ...receiptAmounts, ...billingPreferences, companyStorageKey, billingErrorMessage, invoiceDetails,
+    ...Vue, ...dates, ...billAdjustments, ...receiptAmounts, ...billingPreferences, companyStorageKey, billingErrorMessage, billingBarcodeShortcut, invoiceDetails,
     console: { log() {}, warn() {}, error() {} },
     process: { client: true }, navigator: { onLine: true },
     billingMode: Vue.ref('paynow'),

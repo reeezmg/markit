@@ -83,6 +83,25 @@ test('product search adds all selected items and leaves one blank row', async t 
   await h.result.handleProductSelected([{ barcode: 'one' }, {}, { barcode: 'two' }]); await nextTick()
   assert.deepEqual(plain(h.items.value.map((r: any) => r.barcode)), ['one', 'two', ''])
 })
+
+for (const page of ['billing', 'edit']) for (const blankFirst of [false, true]) test(`${page}: selecting a product preserves existing rows (earlier blank=${blankFirst})`, async t => {
+  const existing = row({ entryId: 'saved-entry', barcode: 'saved', variantId: 'saved-variant' })
+  const rows = ref(blankFirst ? [row({ name: '', category: [], rate: 0 }), existing] : [existing])
+  const fetch = async (_url: string, options: any) => item(options.query.barcode)
+  const h = page === 'billing' ? setup({ $fetch: fetch }) : harness(edit,
+    ['addNewRow', 'fetchItemFromServer', 'fetchItemData', 'processItemResponse', 'handleInvalidBarcode', 'handleProductSelected'],
+    { items: rows, $fetch: fetch, bill: ref({ isMarkit: false }), categories: ref([{ id: 'cat' }]), loadingStates: ref([]), currentRequestIds: ref({}),
+      parentUserCode: ref('A'), parentUserName: ref('Alice'), parentUserId: ref('staff'), barcodeInputs: ref([]) })
+  t.after(h.stop)
+  const state = page === 'billing' ? (h as any).result : h.context
+  if (page === 'billing') (h as any).items.value = rows.value
+  const entries = page === 'billing' ? (h as any).items : rows
+  await state.handleProductSelected([{ barcode: 'new' }])
+  const saved = entries.value.find((entry: any) => entry.entryId === 'saved-entry')
+  assert.equal(saved.barcode, 'saved'); assert.equal(saved.variantId, 'saved-variant')
+  assert.equal(entries.value.filter((entry: any) => entry.barcode === 'new').length, 1)
+  assert.equal(entries.value.filter((entry: any) => !entry.barcode && !entry.name && !entry.category.length).length, 1)
+})
 test('returns replace blank rows, preserve sale and append a fresh row', async t => {
   const h = setup(); t.after(h.stop); h.items.value = [row(), row({ name: '', category: [] })]
   h.result.handleReturnData({ returnedItems: [row({ return: true })] }); await nextTick()

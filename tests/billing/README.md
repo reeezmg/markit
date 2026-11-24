@@ -12,6 +12,10 @@ error tests, fails on any failing assertion and writes `reports/latest.json` and
 Reports are ignored by Git. No Nuxt server, login, `.env` or database is required.
 Dependencies come from the existing Storetools installation (`npm ci`).
 
+Setting `BARCODE_READONLY_DATABASE=1` when running `barcode-shortcut.test.ts`
+additionally checks its actual suffix SQL against CTE fixtures inside `BEGIN READ ONLY`,
+using the configured database connection. This optional check changes no records or schemas.
+
 The browser test needs Chrome or Edge. On another machine, set
 `BILLING_TEST_CHROME` to the browser executable if it is not found automatically.
 It launches a hidden browser with an isolated temporary profile and serves fixtures
@@ -23,6 +27,8 @@ only on `127.0.0.1`; the profile and server are cleaned up afterward.
 |---|---|
 | `totals-drafts.test.ts` | Billing/edit totals, percentage/flat discounts, independent signed adjustments, legacy surcharge draft adoption, input validation, receipt savings, returns, redemption, quantity count, date editing, company storage isolation, draft creation/switching/persistence/deletion/reset and five-draft limit |
 | `items.test.ts` | Row discounts, included/excluded and fixed/variable/subcategory tax, category deduplication, service charge tax/inclusive price preservation, staff inheritance, blank rows, backspace, zero-stock barcode lookup, invalid barcode, stale request race, selected products and returns |
+| `inline-product-search.test.ts` | Debounced company-scoped suggestions, field preferences, selection, stale field/company requests, save/marketplace locks and search failures |
+| `barcode-shortcut.test.ts` | Slash suffix padding/validation, actual item handler resolution and ambiguity, billing/edit Enter and full-barcode replacement, page compilation; optional read-only SQL fixtures prove company/prefix isolation |
 | `save-edit.test.ts` | Cash/UPI/card/credit/split payloads, category/staff links, discount modes, empty/category/quantity/rate/total/payment/date/loading/offline validation, receipt actions, double submission, server failures, request UUID reuse, edit removal IDs and bill deletion |
 | `clients-coupons.test.ts` | Client matches, phone normalization, creation selection, redemption/undo, stale searches, coupon date/activity/minimum/global/client/audience/generated limits, percentage/cap/flat/gift values, clearing coupons, split confirmation |
 | `navigation-loading.test.ts` | Barcode/category/subcategory shortcuts, discount/payment/save keyboard focus, row/parent staff tracking, persisted edit categories/IDs/discount/client/credit/points/splits, legacy service charge category defaults, mock native/web scanner dispatch, item network errors |
