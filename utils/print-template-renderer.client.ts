@@ -52,16 +52,17 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
     return { id, x: mm(center.x - width / 2), y: mm(center.y - height / 2), width: mm(width), height: mm(height) };
   }
   const thermal = template.fontFamily === 'thermal';
-  const squeeze = thermal ? 0.78 : 1;
-  const leading = thermal ? 1.12 : 1.25;
   let activeElement: PrintElement | undefined;
+  // Condensing belongs to the legacy page font, never to an explicitly chosen face.
+  const squeeze = () => thermal && !activeElement?.fontFamily ? 0.78 : 1;
+  const leading = () => thermal && !activeElement?.fontFamily ? 1.12 : 1.25;
   const textPaint = () => {
     const text = activeElement && ['text', 'field'].includes(activeElement.type);
     return text && activeElement?.fills ? compositeFills(activeElement.fills) : { color: activeElement?.color || 'black', opacity: text ? activeElement?.fillOpacity ?? 1 : 1, visible: !text || activeElement?.fillVisible !== false };
   };
   const setFont = (font: number, bold: boolean) => {
     const weight = bold && !activeElement?.bold ? Math.max(700, activeElement?.fontWeight || 400) : activeElement?.fontWeight ?? (bold ? 700 : 400);
-    const family = activeElement?.fontFamily ? JSON.stringify(activeElement.fontFamily) : thermal ? 'Consolas, "Liberation Mono", monospace' : 'Arial, sans-serif';
+    const family = activeElement?.fontFamily ? JSON.stringify(activeElement.fontFamily) : thermal ? 'Consolas, "Liberation Mono", monospace' : template.fontFamily && template.fontFamily !== 'sans' ? JSON.stringify(template.fontFamily) : 'Arial, sans-serif';
     ctx.font = `${activeElement?.italic ? 'italic ' : ''}${weight} ${font}px ${family}`;
     (ctx as any).letterSpacing = `${absoluteLetterSpacing(activeElement?.letterSpacing, activeElement?.letterSpacingUnit, font * 72 / Number(template.dpi)) * Number(template.dpi) / 72}px`;
   };
@@ -80,8 +81,8 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
   function drawText(text: string, x: number, y: number, w: number, font: number, bold: boolean, align: string, inverse = false, strike = false) {
     setFont(font, bold);
     ctx.textBaseline = 'top'; ctx.textAlign = align as CanvasTextAlign;
-    const lines = wrap(text, w / squeeze);
-    const lineHeight = font * (activeElement?.lineHeight || leading);
+    const lines = wrap(text, w / squeeze());
+    const lineHeight = font * (activeElement?.lineHeight || leading());
     ensureCanvasHeight(y + lines.length * lineHeight + 2 * scale);
     const alpha = ctx.globalAlpha, fill = textPaint(); ctx.fillStyle = fill.color;
     ctx.globalAlpha *= fill.visible ? fill.opacity : 0;
@@ -89,16 +90,16 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
       const anchor = x + (align === 'center' ? w / 2 : align === 'right' ? w : 0);
       const top = y + i * lineHeight;
       if (inverse) {
-        const ink = ctx.measureText(lines[i]).width * squeeze;
+        const ink = ctx.measureText(lines[i]).width * squeeze();
         ctx.fillStyle = 'black'; ctx.fillRect(anchor - (align === 'center' ? ink / 2 : align === 'right' ? ink : 0) - 1, top, ink + 2, lineHeight);
         ctx.fillStyle = 'white';
       }
-      ctx.save(); ctx.translate(anchor, top); ctx.scale(squeeze, 1); ctx.fillText(lines[i], 0, 0); ctx.restore();
+      ctx.save(); ctx.translate(anchor, top); ctx.scale(squeeze(), 1); ctx.fillText(lines[i], 0, 0); ctx.restore();
       if (strike) {
-        const ink = ctx.measureText(lines[i]).width * squeeze;
+        const ink = ctx.measureText(lines[i]).width * squeeze();
         ctx.fillRect(anchor - (align === 'center' ? ink / 2 : align === 'right' ? ink : 0), top + font * 0.5, ink, Math.max(1, scale * 0.25));
       }
-      if (activeElement?.underline) { const ink = ctx.measureText(lines[i]).width * squeeze; ctx.fillRect(anchor - (align === 'center' ? ink / 2 : align === 'right' ? ink : 0), top + font, ink, Math.max(1, scale * .15)); }
+      if (activeElement?.underline) { const ink = ctx.measureText(lines[i]).width * squeeze(); ctx.fillRect(anchor - (align === 'center' ? ink / 2 : align === 'right' ? ink : 0), top + font, ink, Math.max(1, scale * .15)); }
       ctx.fillStyle = fill.color;
     }
     ctx.globalAlpha = alpha;
@@ -149,8 +150,8 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
     if (autoText && textValue) {
       setFont(font, element.bold);
       const content = printElementValue(element, data), inset = element.border ? scale : 0;
-      if (element.resizeMode === 'auto-width') w = Math.max(2 * scale, ...content.split('\n').map(line => ctx.measureText(line).width * squeeze + inset * 2 + padLeft + padRight + .1));
-      h = Math.max(2 * scale, wrap(content, Math.max(1, w - inset * 2 - padLeft - padRight) / squeeze).length * font * (element.lineHeight || leading) + inset * 2 + padTop + padBottom);
+      if (element.resizeMode === 'auto-width') w = Math.max(2 * scale, ...content.split('\n').map(line => ctx.measureText(line).width * squeeze() + inset * 2 + padLeft + padRight + .1));
+      h = Math.max(2 * scale, wrap(content, Math.max(1, w - inset * 2 - padLeft - padRight) / squeeze()).length * font * (element.lineHeight || leading()) + inset * 2 + padTop + padBottom);
     }
     if (autoText && !parent && template.paperSize && element.placement === 'absolute' && y + h + Math.max(0, marginBottom) > template.height * scale + .5) throw new Error('Place auto-sized fixed text inside the first sheet.');
     if (autoText && (parent ? element.x * scale + marginLeft + w + Math.max(0, marginRight) > parent.width + .5 || element.y * scale + marginTop + h + Math.max(0, marginBottom) > parent.height + .5 : x + w + Math.max(0, marginRight) > canvas.width + .5)) throw new Error('Auto-sized text exceeds its container. Use auto height, a smaller font or a larger frame.');
@@ -164,8 +165,8 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
       if (!backdrop || backdrop === 'transparent' || !(textElement ? element.backgroundVisible !== false : fill.visible)) return;
       let backdropHeight = height;
       if (textElement && textValue && template.kind === 'receipt' && element.resizeMode !== 'fixed') {
-        const text = printElementValue(element, data), inset = element.border ? scale : 0, available = Math.max(1, w - padLeft - padRight - inset * 2) / squeeze;
-        const measure = (value: string, bold: boolean) => { setFont(font, bold); return wrap(value, available).length * font * (element.lineHeight || leading) };
+        const text = printElementValue(element, data), inset = element.border ? scale : 0, available = Math.max(1, w - padLeft - padRight - inset * 2) / squeeze();
+        const measure = (value: string, bold: boolean) => { setFont(font, bold); return wrap(value, available).length * font * (element.lineHeight || leading()) };
         const [title, ...body] = text.split('\n');
         const textHeight = element.type === 'text' && element.heading ? measure(title, true) + (body.length ? measure(body.join('\n'), element.bold) : 0) : measure(text, element.bold);
         backdropHeight = Math.max(h, textHeight + padTop + padBottom + inset * 2);
@@ -186,7 +187,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
     const tableText = (...args: Parameters<typeof drawText>) => {
       const [text, , y, width, font, bold] = args;
       setFont(font, bold);
-      const height = wrap(text, width / squeeze).length * font * (element.lineHeight || leading);
+      const height = wrap(text, width / squeeze()).length * font * (element.lineHeight || leading());
       ensureCanvasHeight(y + height + 2 * scale);
       tableCommands.push(() => { drawText(...args); });
       return height;
@@ -203,7 +204,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
       if (text) {
         const inset = element.border ? scale : 0;
         setFont(font, element.bold);
-        const contentHeight = wrap(text, Math.max(1, w - inset * 2) / squeeze).length * font * (element.lineHeight || leading);
+        const contentHeight = wrap(text, Math.max(1, w - inset * 2) / squeeze()).length * font * (element.lineHeight || leading());
         const offset = verticalTextOffset(h - inset * 2, contentHeight, element.textVerticalAlign);
         let height: number;
         if (element.type === 'text' && element.heading) {
@@ -273,10 +274,10 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any, op
         const rowFont = (header ? style?.headerFontSize ?? style?.fontSize : style?.fontSize) === undefined ? font : (header ? style?.headerFontSize ?? style?.fontSize : style?.fontSize)! * Number(template.dpi) / 72;
         const total = columns.reduce((sum, column) => sum + column.width, 0);
         const widths = columns.map(column => w * column.width / total);
-        if (widths.some(width => width <= padding * 2 + rowFont * 0.6 * squeeze)) throw new Error('A table column is too narrow. Increase its width, reduce padding or reduce text size.');
+        if (widths.some(width => width <= padding * 2 + rowFont * 0.6 * squeeze())) throw new Error('A table column is too narrow. Increase its width, reduce padding or reduce text size.');
         const bold = header ? element.tableHeaderBold !== false : element.bold;
         setFont(rowFont, bold);
-        const textHeights = values.map((value, i) => wrap(value, (widths[i] - padding * 2) / squeeze).length * rowFont * leading);
+        const textHeights = values.map((value, i) => wrap(value, (widths[i] - padding * 2) / squeeze()).length * rowFont * leading());
         const rowHeight = Math.max((header ? style?.headerHeight ?? 0 : style?.rowHeight ?? 0) * scale, Math.max(...textHeights) + padding * 2);
         ensureCanvasHeight(rowY + rowHeight + 2 * scale);
         if (rowY + rowHeight > 15000) throw new Error('Receipt is too long to render. Reduce the number of items.');

@@ -29,6 +29,20 @@ test('row clicks open the side panel while interactive table controls retain the
   assert.equal(h.context.selectedSale.value.companyId,'branch')
 })
 
+test('Sales printing loads the owner-scoped receipt design instead of rebuilding list data',async t=>{
+  const receipt={companyId:'branch',printTemplate:{id:'saved-font-design'},entries:[]},requests:any[]=[],printed:any[]=[]
+  const h=harness('pages/erp/sales.vue',['print','saleDocument'],{
+    sales:ref([{id:'bill',companyId:'branch'}]),printData:ref(null),
+    $fetch:async(url:string,options:any)=>{requests.push({url,options});return receipt},
+    printBill:async(data:any)=>{printed.push(data)},
+  });t.after(h.stop)
+  await h.context.print('bill')
+  assert.equal(requests[0].url,'/api/billSale/receipt')
+  assert.equal(requests[0].options.headers['x-company-id'],'branch')
+  assert.equal(requests[0].options.headers['x-company-filter'],'branch')
+  assert.equal(printed[0].printTemplate.id,'saved-font-design')
+})
+
 test('slow responses cannot replace another selected bill and requests use that bill company',async t=>{
   const pending:any[]=[],props={bill:{id:'first',companyId:'one'},fetcher:(url:string,options:any)=>new Promise(resolve=>pending.push({url,options,resolve}))}
   const h=harness('components/Sales/DetailPanel.vue',['receiptVersion','headers','loadBill'],{props,receipt:ref(null),receiptError:ref(''),receiptLoading:ref(false)});t.after(h.stop)

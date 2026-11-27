@@ -1271,11 +1271,7 @@ const print = async (id) => {
     return
   }
 
-  const session = useAuth().session.value
-
-  printData.value = session?.allStores || sale.invoiceCode
-    ? await $fetch('/api/billSale/receipt', { query: { id: sale.id } })
-    : buildPrintDataFromSale(sale, session)
+  printData.value = await saleDocument(sale)
 
   await printBill(printData.value)
 }
@@ -1806,7 +1802,7 @@ watch(sales, rows => {
             </div>
             <div class="border-t border-gray-200 p-3 dark:border-gray-800"><UPagination v-model="page" :page-count="Number(pageCount)" :total="Number(pageTotal)" size="xs" /></div>
           </aside>
-          <SalesDetailPanel :bill="selectedSale" :revision="detailRevision" :fetcher="$fetch" @close="selectedSale=null" @print="print(selectedSale.id)" />
+          <SalesDetailPanel :bill="selectedSale" :revision="detailRevision" :fetcher="$fetch" @close="selectedSale=null" @print="printBill($event)" />
         </template>
         </div>
         <UDashboardModal

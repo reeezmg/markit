@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Receipt font consistency</title></head><body><pre id="result">RUNNING</pre><div id="samples"></div><script type="module">
+import { createApp, nextTick } from 'vue';
+import jsPDF from 'jspdf';
+import ReceiptPreview from '../components/PrintTemplateReceipt.vue';
+import { designerFonts } from '../utils/designer-presentation.ts';
+import { classicReceiptTemplate, newElement, templateSchema } from '../utils/print-templates.ts';
+import { renderPrintTemplate, templatePrintBytes } from '../utils/print-template-renderer.client.ts';
+import { createThermalReceiptPDF, generateThermalReceiptPDF } from '../utils/thermal-receipt.client.ts';
+import { shareReceiptPDF } from '../utils/share-receipt.client.ts';
+import { prepareReceiptPrint } from '../composables/useWebUsbPrinter.ts';
+const check = (value, message) => { if (!value) throw Error(message); }, logs=[];
+const data={companyId:'font-company',companyName:'Font Sample',invoiceNumber:10225,grandTotal:1300,paymentMethod:'UPI',entries:[{description:'GREY SALWAR',qty:1,mrp:1550,tvalue:1300}]};
+const text={...newElement('text',72),id:'title',text:'Font sample WMi 10225',fontSize:13,height:8,resizeMode:'auto-height',bold:true,italic:true};
+const table={...newElement('items',72),id:'items',fontSize:9,tableBorders:false,tablePadding:0,columns:[{id:'description',header:'DESCRIPTION',field:'entry.description',width:75,align:'left'},{id:'qty',header:'QTY',field:'entry.qty',width:25,align:'right'}]};
+const base={...classicReceiptTemplate(),id:'font-design',name:'Chosen font',elements:[text,table]};
+const originalFill=CanvasRenderingContext2D.prototype.fillText, originalAddImage=jsPDF.API.addImage, originalSave=jsPDF.API.save;
+let calls=[], embeddedImage, saved=false;
+CanvasRenderingContext2D.prototype.fillText=function(value,x,y,...rest){calls.push({font:this.font,scale:this.getTransform().a,value:String(value)});return originalFill.call(this,value,x,y,...rest)};
+jsPDF.API.addImage=function(value,...args){embeddedImage=value;return originalAddImage.call(this,value,...args)};
+jsPDF.API.save=function(){saved=true;return this};
+try {
+  for(const font of designerFonts){
+    const design=templateSchema.parse({...base,fontFamily:'thermal',elements:base.elements.map(e=>({...e,fontFamily:font}))});
+    calls=[];const output=await renderPrintTemplate(design,data),fontCalls=[...calls];
+    check(fontCalls.length>3&&fontCalls.every(c=>c.font.includes(font)&&c.scale===1),font+': chosen text/table font was substituted or condensed');
+    check(fontCalls[0].font.includes('italic')&&/700|bold/.test(fontCalls[0].font),font+': chosen weight/style lost');
+    const standard=await renderPrintTemplate({...design,fontFamily:'sans'},data);
+    check(output.canvas.toDataURL()===standard.canvas.toDataURL(),font+': page font distorted an explicit layer font');
+    const editing=await renderPrintTemplate(design,data,{mode:'design'}),bytes=templatePrintBytes(output,design);
+    check(bytes.join()===templatePrintBytes(editing,design).join(),font+': editor and printer glyphs differ');
+    check(JSON.stringify(output.bounds)===JSON.stringify(editing.bounds),font+': editing changed font geometry');
+    calls=[];await renderPrintTemplate({...base,fontFamily:font},data);
+    check(calls.every(c=>c.font.includes(font)&&c.scale===1),font+': page font did not reach text and table');
+    const receipt={...data,printTemplate:design};
+    window.$fetch=async()=>{throw Error('A receipt snapshot must not load a different default design')};
+    check((await prepareReceiptPrint(receipt)).join()===bytes.join(),font+': machine printing differs from preview');
+    await createThermalReceiptPDF(receipt);
+    check(embeddedImage===output.canvas.toDataURL('image/png'),font+': PDF embeds different font pixels');
+    saved=false;await generateThermalReceiptPDF(receipt,'receipt.pdf');
+    check(saved&&embeddedImage===output.canvas.toDataURL('image/png'),font+': download differs from preview');
+    let upload;
+    window.$fetch=async(url,options)=>{check(url==='/api/billSale/share-receipt','Unexpected share request');upload=options.body;return {receiptId:'shared',path:'/receipt/shared'}};
+    await shareReceiptPDF(receipt,'bill');
+    check(embeddedImage===output.canvas.toDataURL('image/png')&&upload.pdf.startsWith('data:application/pdf'),font+': WhatsApp PDF has different font pixels');
+    const host=document.createElement('div');document.querySelector('#samples').append(host);
+    const app=createApp(ReceiptPreview,{data:receipt});app.mount(host);
+    for(let i=0;i<100&&!host.querySelector('img');i++){await new Promise(r=>setTimeout(r,20));await nextTick()}
+    check(host.querySelector('img')?.src===output.canvas.toDataURL('image/png'),font+': displayed receipt differs from PDF/print');
+    app.unmount();host.remove();
+    logs.push('PASS '+font+': text/table proportions, page inheritance, preview, download, WhatsApp PDF and machine raster');
+  }
+  calls=[];await renderPrintTemplate(base,data);
+  check(calls.every(c=>Math.abs(c.scale-.78)<.001),'Legacy condensed page font changed');
+  logs.push('PASS legacy condensed page font retained for layers using Page font');
+  document.querySelector('#result').textContent=logs.join('\n')+'\nALL PASSED';
+} catch(error){document.querySelector('#result').textContent=logs.join('\n')+'\nFAILED '+error.stack+' '+JSON.stringify(error.issues||[])}
+finally{CanvasRenderingContext2D.prototype.fillText=originalFill;jsPDF.API.addImage=originalAddImage;jsPDF.API.save=originalSave}
+</script></body></html>

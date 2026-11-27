@@ -53,7 +53,7 @@ const date = (value:any) => new Date(value).toLocaleString('en-IN',{timeZone:'As
     <div v-if="tab==='bill'" id="sale-panel-bill" role="tabpanel" aria-labelledby="sale-tab-bill" class="max-h-[75vh] overflow-auto p-4">
       <p v-if="receiptLoading" role="status">Loading bill…</p>
       <div v-else-if="receiptError" class="space-y-3"><UAlert color="red" title="Could not load bill" :description="receiptError" /><UButton color="gray" @click="loadBill">Retry</UButton></div>
-      <template v-else-if="receipt"><div class="mb-4 flex justify-end"><UButton icon="i-heroicons-printer" color="gray" @click="emit('print')">Print</UButton></div><ThermalReceipt :key="`${bill.companyId}:${bill.id}:${revision}`" :data="receipt" /></template>
+      <template v-else-if="receipt"><div class="mb-4 flex justify-end"><UButton icon="i-heroicons-printer" color="gray" @click="emit('print', receipt)">Print</UButton></div><ThermalReceipt :key="`${bill.companyId}:${bill.id}:${revision}`" :data="receipt" /></template>
     </div>
     <div v-else id="sale-panel-history" role="tabpanel" aria-labelledby="sale-tab-history" class="max-h-[75vh] overflow-auto p-4">
       <p class="mb-4 text-xs text-gray-500">Recorded bill snapshots, newest first. Expand a record to see its saved items and payment details.</p>

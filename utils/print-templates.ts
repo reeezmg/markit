@@ -86,7 +86,7 @@ export const templateSchema = z.object({
   width: z.number().min(25).max(216), height: z.number().min(15).max(297),
   paperSize: z.enum(['A4', 'A5', 'Letter']).optional(),
   dpi: z.enum(['203', '300']),
-  fontFamily: z.enum(['sans', 'thermal']).optional(),
+  fontFamily: z.enum(['sans', 'thermal', ...designerFonts]).optional(),
   elements: z.array(elementSchema).min(1).max(40),
 }).superRefine((t, ctx) => {
   if (t.kind === 'label' && (t.width > 100 || t.height > 150 || t.paperSize)) ctx.addIssue({ code: 'custom', message: 'Labels must be at most 100 x 150 mm' });

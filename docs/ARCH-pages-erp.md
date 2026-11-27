@@ -1100,8 +1100,9 @@ Clicking a sale row, its invoice number or Details opens a distributor-style spl
 view: a compact searchable/paginated list on the left and `Sales/DetailPanel.vue`
 on the right (stacked on small screens). Close returns to the full sales table.
 The panel has exactly Bill and History tabs. Bill reads the selected owner's
-`billSale/receipt` payload and renders `ThermalReceipt` with the existing Print
-action. History reads paginated saved snapshots through `billSale/history`, newest
+`billSale/receipt` payload and renders `ThermalReceipt`. Its Print action passes
+that same loaded receipt and saved design directly to printing. Table Print also
+loads this owner-scoped receipt instead of rebuilding it from list rows. History reads paginated saved snapshots through `billSale/history`, newest
 first, with expandable historical items, totals, notes and split methods. Table
 payment/notes/action controls retain their own clicks. Selection updates/clears
 with refreshed rows and company changes; data saves refresh the panel. Receipt

@@ -15,7 +15,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'markit-print-test-'));
 const screenshot = process.env.PRINT_TEST_SCREENSHOT;
 const previewQuery = process.env.AFTER_SALES_PREVIEW ? '?preview='+encodeURIComponent(process.env.AFTER_SALES_PREVIEW) : ['no-tax', 'classic', 'designer', 'editor', 'label', 'receipt', 'box', 'paint', 'empty-paint', 'codes', 'tax-tools'].includes(process.env.PRINT_TEST_PRESET) ? `?preview=${process.env.PRINT_TEST_PRESET}` : '?preview=1';
 const page = process.argv[2] || process.env.PRINT_TEST_PAGE || 'print-template-browser.html';
-const documentDesignerUi = ['document-designer-browser.html', 'document-designer-page-browser.html', 'document-designer-layers-browser.html', 'document-designer-bindings-browser.html', 'printer-designer-browser.html', 'printer-interactions-browser.html', 'designer-combinations-browser.html', 'print-template-browser.html', 'sheet-image-browser.html', 'receipt-audit-browser.html'].includes(page);
+const documentDesignerUi = ['document-designer-browser.html', 'document-designer-page-browser.html', 'document-designer-layers-browser.html', 'document-designer-bindings-browser.html', 'printer-designer-browser.html', 'printer-interactions-browser.html', 'designer-combinations-browser.html', 'print-template-browser.html', 'sheet-image-browser.html', 'receipt-font-browser.html', 'receipt-audit-browser.html'].includes(page);
 const loansUi = page === 'loans-browser.html';
 const investorsUi = page === 'investors-browser.html';
 const investmentUi = loansUi || investorsUi;

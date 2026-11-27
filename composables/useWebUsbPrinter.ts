@@ -334,17 +334,9 @@ export function useWebUsbPrinter() {
 }
 
 export async function prepareReceiptPrint(printData: any, design?: PrintTemplate | null) {
-    const template = design === undefined ? await loadPrintTemplate('receipt', printData.companyId) : design;
+    const template = design === undefined ? printData.printTemplate === undefined ? await loadPrintTemplate('receipt', printData.companyId) : printData.printTemplate : design;
     if (template?.paperSize) throw new Error('Print sheet receipts using the system print dialog or download their PDF.');
-    let bytes: Uint8Array;
-    try {
-      bytes = template ? templatePrintBytes(await renderPrintTemplate(template, printData), template) : buildBillReceiptBytes(printData);
-    } catch (error) {
-      if (design !== undefined) throw error; // An editor test must expose design errors.
-      console.warn('Receipt rendering failed; using the built-in receipt.', error);
-      bytes = buildBillReceiptBytes(printData);
-    }
-    return bytes;
+    return template ? templatePrintBytes(await renderPrintTemplate(template, printData), template) : buildBillReceiptBytes(printData);
 }
 
 export async function prepareLabelPrint(labelData: any[], printerLabelSize: string, language: LabelPrinterLanguage, design?: PrintTemplate | null) {
