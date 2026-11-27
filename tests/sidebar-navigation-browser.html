@@ -55,10 +55,13 @@ async function checkSectionLayouts(){
         const rect=bounds[index]
         assert(rect.width>=40&&rect.height>=40,'Section buttons have a comfortable click area')
         assert(rect.left>=box.left&&rect.right<=box.right&&rect.top>=box.top&&rect.bottom<=box.bottom,'Buttons fit inside the switcher')
-        if(!compact){const range=document.createRange();range.selectNodeContents(button);const label=range.getBoundingClientRect();assert(label.left>=rect.left&&label.right<=rect.right,'Full section labels fit at the minimum sidebar width')}
       }
-      if(compact){assert(bounds.every(rect=>near(rect.left,bounds[0].left)&&near(rect.width,bounds[0].width)),'Compact buttons stay centered in one column');const panel=list.closest('aside').getBoundingClientRect();assert(near((box.left+box.right)/2,(panel.left+panel.right-1)/2),'Compact switcher is centered in the sidebar')}
-      else{assert(near(bounds[0].width,bounds[1].width)&&near(bounds[0].top,bounds[1].top),'First row has balanced columns');if(buttons.length===3)assert(near(bounds[2].width,box.width-8)&&bounds[2].top>bounds[0].top,'Third section spans the second row');if(buttons.length===4)assert(bounds.every(rect=>near(rect.width,bounds[0].width))&&near(bounds[2].top,bounds[3].top),'Four sections form a balanced grid')}
+      if(compact){
+        assert(bounds.every(rect=>near(rect.left,bounds[0].left)&&near(rect.width,bounds[0].width)),'Collapsed icons stay centered in one column');const panel=list.closest('aside').getBoundingClientRect();assert(near((box.left+box.right)/2,(panel.left+panel.right-1)/2),'Collapsed icons are centered in the sidebar')
+      }else{
+        assert(box.height===40&&bounds.every(rect=>near(rect.top,bounds[0].top)),'Expanded icons fit on a single 40px row')
+        assert(buttons.every(button=>button.getAttribute('aria-label')&&button.querySelector('svg')&&!button.textContent.trim()),'Every section has a named icon without a visible label')
+      }
       buttons[0].click();await nextTick();buttons[0].focus();buttons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));await nextTick();assert(document.activeElement===buttons.at(-1)&&buttons.at(-1).getAttribute('aria-selected')==='true','End selects and focuses the last section')
       buttons.at(-1).dispatchEvent(new KeyboardEvent('keydown',{key:compact?'ArrowDown':'ArrowRight',bubbles:true}));await nextTick();assert(document.activeElement===buttons[0]&&buttons[0].getAttribute('aria-selected')==='true','Arrow navigation wraps to the first section');assert(buttons.filter(button=>button.tabIndex===0).length===1,'Only the active section is a Tab stop')
       if(width===250&&[1,3,7,15].includes(mask))previews.push({count:buttons.length,compact,html:list.outerHTML})
@@ -79,6 +82,21 @@ try{
   target.value='a';await wait(()=>!checkbox('Show ERP section').checked,'Original company editor restored')
   fail=true;toggle('Show ERP section');await save();assert(error.value==='Save rejected'&&tabs().length===0&&urls().includes('/client?from=crm'),'Rejected saves preserve sidebar');fail=false
   await click('Show all');await save();await wait(()=>tabs().length===4,'Show all restores sections')
+  const selected=()=>layout().querySelector('[role=tab][aria-selected=true]')?.getAttribute('aria-label')
+  async function navigate(path,query={}){Object.assign(route,{path,query,fullPath:path});await nextTick()}
+  await navigate('/crm');assert(selected()==='CRM','Direct CRM navigation selects CRM')
+  for(const path of ['/crm/deals','/crm/funnel','/crm/activities','/crm/calendar','/crm/segments','/crm/reports','/crm/settings']){
+    await navigate(path);assert(selected()==='CRM','CRM page keeps CRM selected: '+path)
+  }
+  await navigate('/client',{from:'crm'});assert(selected()==='CRM','CRM client link keeps CRM selected')
+  await navigate('/settings/sidebar');assert(selected()==='CRM','Shared Settings keeps CRM selected')
+  remount.value++;await wait(()=>layout()?.querySelector('[role=tab]'),'Layout remount finishes');assert(selected()==='CRM','CRM selection survives a layout remount on Settings')
+  await navigate('/erp/billing');assert(selected()==='ERP','ERP navigation selects ERP')
+  await navigate('/client',{from:'crm'});assert(selected()==='CRM','CRM query selects CRM even though ERP also lists clients')
+  await navigate('/erp/billing');layout().querySelector('[role=tab][aria-label=Storetools]').click();await nextTick();assert(selected()==='Storetools','User can switch sections before navigation')
+  records.a.revision++;await api.load();await nextTick();assert(selected()==='Storetools','Preference refresh keeps the chosen section')
+  await navigate('/after-sales');assert(selected()==='ERP','After-sales navigation selects ERP')
+  await navigate('/storefront/editor');await navigate('/settings/sidebar');remount.value++;await wait(()=>layout()?.querySelector('[role=tab]'),'Shared-page remount finishes');assert(selected()==='Storetools','Storetools selection survives layout remount')
   const accountPath='/accountant/manual-journals';for(const section of sidebarSections)records.a.sections[section].enabled=section==='erp';records.a.sections.erp.hiddenPages=menus.value.erp.flatMap(link=>link.children?.map(child=>child.to)||[link.to]).filter(path=>path&&path!==accountPath);records.a.revision++;await api.load()
   await wait(()=>urls().includes(accountPath),'Selected Account subpage appears');assert(!urls().includes('/accountant/chart-of-accounts'),'Expanded Account excludes hidden subpages')
   layout().querySelector('button[aria-label="Collapse sidebar"]').click();await nextTick();assert(!urls().includes('/accountant/chart-of-accounts')&&urls().includes(accountPath),'Compact Account excludes hidden subpages')
@@ -87,6 +105,6 @@ try{
   assert(records.branch.sections.crm.enabled===false&&records.a.sections.crm.enabled===false,'Company settings persist separately')
   assert(!layout().querySelector('[role=tablist]'),'No empty switcher is shown when all sections are hidden')
   if(new URLSearchParams(location.search).has('preview'))document.querySelector('#app').innerHTML='<main class="p-6 bg-gray-50 min-h-screen"><h1 class="text-xl font-semibold mb-2">Sidebar sections</h1><p class="text-sm text-gray-600 mb-6">One, two, three and four enabled sections · expanded and compact</p><div class="flex flex-wrap gap-6">'+[1,2,3,4].map(count=>'<section class="w-[250px] rounded-xl border bg-white p-4"><h2 class="font-medium mb-4">'+count+' section'+(count===1?'':'s')+'</h2>'+previews.find(item=>item.count===count&&!item.compact).html+'<div class="mt-6">'+previews.find(item=>item.count===count&&item.compact).html+'</div></section>').join('')+'</div></main>'
-  document.querySelector('#result').textContent='ALL PASSED: all 15 section combinations at 200/250/300px, expanded/compact alignment, label fit, keyboard navigation, pages, persistence, branch isolation, rejected saves, all hidden, settings recovery and read-only staff'
+  document.querySelector('#result').textContent='ALL PASSED: all 15 section combinations at 200/250/300px, horizontal icon tabs, collapsed alignment, keyboard navigation, pages, persistence, branch isolation, rejected saves, all hidden, settings recovery and read-only staff'
 }catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nUI: '+document.querySelector('#app').textContent}
 </script></body></html>

@@ -1,518 +1,113 @@
 <script setup lang="ts">
-const companyScope = useCompanyScope();
-const $fetch = companyScope.fetch;
-import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
-import { STANDARD_LABEL_ID, defaultTemplate, originalLabelTemplate, emptyPrintSettings, fieldValue, labelFields, newElement, printSettingsSchema, receiptFields, NO_TAX_RECEIPT_ID, noTaxReceiptTemplate, type PrintElement, type PrintSettings } from '~/utils/print-templates';
-import { labelVariables, labelSampleData, type LabelVariable } from '~/utils/label-variables';
-import { prepareDesignerImage } from '~/utils/designer-image.client';
-import { receiptPaperSizes, labelPaperSizes, resizePrintPaper } from '~/utils/print-paper';
-import { resizeLabelBox, type ResizeHandle } from '~/utils/label-box';
-import { useDesignerHistory } from '~/utils/designer-history';
-import { cachePrintSettings } from '~/utils/load-print-template.client';
-import { downloadTemplatePDF, renderPrintTemplate } from '~/utils/print-template-renderer.client';
-import { usePrint } from '~/composables/usePrintBill';
-import { useDocumentSections } from '~/utils/document-designer-sections';
-import TableProperties from './DocumentDesigner/TableProperties.vue';
-import ColumnWidth from './DocumentDesigner/ColumnWidth.vue';
-import { setColumnPercentage } from '~/utils/document-table';
-import CanvasToolbar from './DocumentDesigner/CanvasToolbar.vue';
-import DesignerTools from './DocumentDesigner/Tools.vue';
-import TextProperties from './DocumentDesigner/TextProperties.vue';
-import type { CustomDocumentSection } from '~/utils/document-designer';
-import PrinterDesignerWorkspace from './PrinterDesignerWorkspace.vue';
-import ThermalReceipt from './ThermalReceipt.vue';
-import { defaultTableColumns, twoLineTableColumns, classicReceiptTemplate, taxlessReceiptTemplate, CLASSIC_RECEIPT_ID } from '~/utils/print-templates';
-import { receiptTableVariables } from '~/utils/receipt-table';
-
-function setPaperSize(value: string) {
-  if (!design.value || !value) return;
-  try {
-    const [width, height] = value.split('x').map(Number);
-    Object.assign(design.value, resizePrintPaper(design.value, width, height === undefined ? design.value.height : height));
-    fitPreview.value = true;
-  } catch (err: any) { error.value = err.message; }
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { STANDARD_LABEL_ID, CLASSIC_RECEIPT_ID, NO_TAX_RECEIPT_ID, classicReceiptTemplate, noTaxReceiptTemplate, defaultTemplate, emptyPrintSettings, printSettingsSchema, type PrintSettings } from '~/utils/print-templates'
+import { labelSampleData, type LabelVariable } from '~/utils/label-variables'
+import { useDesignerHistory } from '~/utils/designer-history'
+import { usePrintDesignDraft } from '~/composables/usePrintDesignDraft'
+import { upgradeReceiptToolTemplate } from '~/utils/receipt-tool-template'
+import { upgradeLabelToolTemplate } from '~/utils/label-tool-template'
+import { cachePrintSettings } from '~/utils/load-print-template.client'
+import { renderPrintTemplate, downloadTemplatePDF } from '~/utils/print-template-renderer.client'
+import { usePrint } from '~/composables/usePrintBill'
+import PrintEditor from './DocumentDesigner/PrintEditor.vue'
+import PrinterDesignerWorkspace from './PrinterDesignerWorkspace.vue'
+import ThermalReceipt from './ThermalReceipt.vue'
+const props = defineProps<{ receiptData: any; labelData: any; hideOriginalReceipt?: boolean; workspace?: boolean; templateId?: string; templateKind?: string }>()
+const scope = useCompanyScope('form'), $fetch = scope.fetch, route = useRoute(), drafts = usePrintDesignDraft(), printer = usePrint()
+const entryPath = route.fullPath, ownerId = ref('')
+const previewData = ref<any>(null)
+const settings = ref<PrintSettings>(emptyPrintSettings()), saved = ref(''), selectedId = ref(''), loading = ref(true), busy = ref(false), error = ref(''), message = ref('')
+const history = useDesignerHistory(settings), customVariables = ref<LabelVariable[]>([]), variableError = ref('')
+const presetPreview = ref<'no-tax' | 'classic' | null>(null), choosingReceiptBase = ref(false), receiptBaseChooser = ref<HTMLElement | null>(null)
+const companyId = computed(() => ownerId.value || scope.auth.session.value?.companyId || ''), canSave = computed(() => ['admin', 'manager'].includes(scope.auth.session.value?.role || ''))
+const design = computed(() => settings.value.templates.find(t => t.id === selectedId.value)), libraryTemplates = computed(() => settings.value.templates)
+const dirty = computed(() => saved.value !== JSON.stringify(settings.value)), needsReceiptChoice = computed(() => props.hideOriginalReceipt && settings.value.receiptId === null)
+const sampleLabel = computed(() => labelSampleData(props.labelData, customVariables.value))
+const classicSample = computed(() => ({ ...props.receiptData, isTaxIncluded: true, paymentMethod: 'UPI', upiId: props.receiptData.upiId || 'preview@upi',
+  entries: [{ description: 'FOOTWEAR', hsn: '64039990', qty: 1, mrp: 250, value: 250, discount: 0, tax: 5, tvalue: 250 }, { description: 'LADIES PANT', hsn: '6101', qty: 1, mrp: 290, value: 290, discount: 0, tax: 12, tvalue: 290 }],
+  subtotal: 540, tqty: 2, tvalue: 540, ttvalue: 540, grandTotal: 540, discount: 0, tdiscount: 0, thankYouNote: 'Thank you please visit us again' }))
+const sampleReceipt = computed(() => { const data = design.value?.fontFamily === 'thermal' ? classicSample.value : props.receiptData; return { ...data, entries: (data.entries || []).map((e: any) => ({ ...labelSampleData(e, customVariables.value), ...e, labelVariablesLoaded: true })) } })
+const presetData = computed(() => ({ ...classicSample.value, printTemplate: presetPreview.value === 'no-tax' ? noTaxReceiptTemplate() : classicReceiptTemplate() }))
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
+let loadVersion = 0, receiptChooserTrigger: HTMLElement | null = null
+function retain() {
+  if (!saved.value || !companyId.value) return
+  drafts.value[companyId.value] = { settings: clone(settings.value), saved: saved.value, selectedId: selectedId.value, returnTo: props.workspace ? drafts.value[companyId.value]?.returnTo || `/settings/printer?entryCompany=${encodeURIComponent(companyId.value)}` : entryPath }
 }
-const paperSizes = computed(() => design.value?.kind === 'label' ? labelPaperSizes : receiptPaperSizes);
-const paperPresetValue = computed(() => {
-  const t = design.value;
-  if (!t) return '';
-  const match = paperSizes.value.find(p => p.width === t.width && (!('height' in p) || p.height === t.height));
-  return match ? ('height' in match ? `${match.width}x${match.height}` : String(match.width)) : '';
-});
-const props = defineProps<{ receiptData: any; labelData: any; hideOriginalReceipt?: boolean }>();
-const classicSample = computed(() => ({
-  ...props.receiptData, isTaxIncluded: true, paymentMethod: 'UPI', upiId: props.receiptData.upiId || 'preview@upi',
-  entries: [
-    { description: 'FOOTWEAR', hsn: '64039990', qty: 1, mrp: 250, value: 250, discount: 0, tax: 5, tvalue: 250 },
-    { description: 'LADIES PANT', hsn: '6101', qty: 1, mrp: 290, value: 290, discount: 0, tax: 12, tvalue: 290 },
-  ],
-  subtotal: 540, tqty: 2, tvalue: 540, ttvalue: 540, grandTotal: 540, discount: 0, tdiscount: 0,
-  thankYouNote: 'Thank you please visit us again',
-}));
-const settings = ref<PrintSettings>(emptyPrintSettings());
-const history = useDesignerHistory(settings);
-const { canUndo, canRedo } = history;
-const selectedId = ref('');
-const editorOpen = ref(false);
-const presetPreview = ref<'no-tax' | 'classic' | null>(null);
-const presetData = computed(() => ({ ...classicSample.value, printTemplate: presetPreview.value === 'no-tax' ? noTaxReceiptTemplate() : classicReceiptTemplate() }));
-async function presetOutput(mode: 'pdf' | 'print') {
-  busy.value = true; error.value = '';
-  try {
-    if (mode === 'print') await printer.printBill(presetData.value, presetData.value.printTemplate);
-    else {
-      const { generateThermalReceiptPDF } = await import('~/utils/thermal-receipt.client');
-      await generateThermalReceiptPDF(presetData.value);
-    }
-  } catch (err: any) { error.value = err.message || 'Could not output receipt'; }
-  finally { busy.value = false; }
-}
-const zoom = ref(2);
-const fitPreview = ref(true);
-const editorTab = ref<'content' | 'setup'>('setup');
-const variableSearch = ref('');
-const customVariables = ref<LabelVariable[]>([]);
-const variableError = ref('');
-const variablePickerOpen = ref(false);
-const labelPreviewMode = ref<'current' | 'discount' | 'no-discount'>('current');
-const sampleLabel = computed(() => {
-  const data = labelSampleData(props.labelData, customVariables.value);
-  if (labelPreviewMode.value !== 'current') {
-    data.dprice = labelPreviewMode.value === 'discount' ? Number(data.sprice ?? data.variant.sprice) * 0.9 : null;
-    data.variant.dprice = data.dprice;
-  }
-  return data;
-});
-const sampleReceipt = computed(() => {
-  const data = design.value?.fontFamily === 'thermal' ? classicSample.value : props.receiptData;
-  return { ...data, entries: (data.entries || []).map((entry: any) => ({ ...labelSampleData(entry, customVariables.value), ...entry, labelVariablesLoaded: true })) };
-});
-const columnSearch = ref('');
-const tableVariableGroups = computed(() => {
-  const variables = [...receiptTableVariables, ...customVariables.value.filter(v => /^(product|variant)\./.test(v.key))].filter(v => `${v.group} ${v.label} ${v.key}`.toLowerCase().includes(columnSearch.value.toLowerCase()));
-  return [...new Set(variables.map(v => v.group))].map(group => ({ group, variables: variables.filter(v => v.group === group) }));
-});
-function customizeTable() {
-  if (element.value?.type === 'items') { element.value.columns = defaultTableColumns(); element.value.tableBorders = true; element.value.tablePadding = 0.5; }
-}
-function twoLineTable() {
-  if (element.value?.type !== 'items') return;
-  Object.assign(element.value, { columns: twoLineTableColumns(), tableBorders: false, tableRules: true, tableTotals: true, tableHeaderBold: false, tablePadding: 0, tableItemGap: 3 });
-}
-function addColumn() {
-  const columns = element.value?.columns;
-  if (!columns || columns.length >= 12) return;
-  columns.push({ id: crypto.randomUUID(), header: 'New column', field: 'entry.description', width: 20, align: 'left', line: columns.at(-1)?.line || 1 });
-  setColumnWidth(columns.length - 1, 20);
-}
-function columnPercent(index: number) {
-  const columns = element.value?.columns || [];
-  return columns[index] ? columns[index].width / columns.filter(c => (c.line || 1) === (columns[index].line || 1)).reduce((sum, c) => sum + c.width, 0) * 100 : 0;
-}
-function setColumnWidth(index: number, percent: number) {
-  const columns = element.value?.columns;
-  if (!columns || !columns[index] || !Number.isFinite(percent)) return;
-  const line = columns.filter(c => (c.line || 1) === (columns[index].line || 1));
-  setColumnPercentage(line, line.indexOf(columns[index]), percent);
-}
-function moveColumn(index: number, delta: number) {
-  const columns = element.value?.columns;
-  if (!columns || index + delta < 0 || index + delta >= columns.length) return;
-  const [column] = columns.splice(index, 1); columns.splice(index + delta, 0, column);
-}
-const previewViewport = ref<HTMLElement | null>(null);
-const viewportSize = ref({ width: 0, height: 0 });
-let viewportObserver: ResizeObserver | undefined;
-watch(previewViewport, (viewport) => {
-  viewportObserver?.disconnect();
-  if (!viewport) return;
-  viewportObserver = new ResizeObserver(([entry]) => {
-    viewportSize.value = { width: entry.contentRect.width, height: entry.contentRect.height };
-  });
-  viewportObserver.observe(viewport);
-}, { flush: 'post' });
-const elementId = ref('');
-const loading = ref(true);
-const busy = ref(false);
-const message = ref('');
-const error = ref('');
-const previewError = ref('');
-const preview = ref('');
-const rendering = ref(false);
-const previewHeight = ref(100);
-const previewBounds = ref<{ id: string; x: number; y: number; width: number; height: number }[]>([]);
-const saved = ref('');
-const previewBox = ref<HTMLElement | null>(null);
-const canSave = computed(() => ['admin', 'manager'].includes(companyScope.auth.session.value?.role || ''));
-const design = computed(() => settings.value.templates.find(t => t.id === selectedId.value));
-const libraryTemplates = computed(() => settings.value.templates);
-const needsReceiptChoice = computed(() => props.hideOriginalReceipt && settings.value.receiptId === null);
-const choosingReceiptBase = ref(false);
-const receiptBaseChooser = ref<HTMLElement | null>(null);
-let receiptChooserTrigger: HTMLElement | null = null;
-async function chooseReceiptBase(event: Event) { receiptChooserTrigger = event.currentTarget as HTMLElement; choosingReceiptBase.value = true; await nextTick(); receiptBaseChooser.value?.focus(); }
-async function cancelReceiptBase() { choosingReceiptBase.value = false; await nextTick(); receiptChooserTrigger?.focus(); }
-async function closeEditor() { editorOpen.value = false; await nextTick(); if (design.value?.kind === 'receipt') receiptChooserTrigger?.focus(); }
-const element = computed(() => design.value?.elements.find(e => e.id === elementId.value));
-const canvasHeight = computed(() => design.value?.kind === 'label' ? design.value.height : previewHeight.value);
-const hitBounds = computed(() => design.value?.kind === 'label' ? design.value.elements : previewBounds.value);
-const resizeHandles = computed<ResizeHandle[]>(() => design.value?.kind === 'receipt' && element.value?.placement !== 'absolute' ? ['e', 'se', 's', 'sw', 'w'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']);
-const selectionBounds = computed(() => hitBounds.value.find(b => b.id === elementId.value));
-const showGuides = ref(true);
-const selectedIndex = computed(() => design.value?.elements.findIndex(e => e.id === elementId.value) ?? -1);
-const sectionEngine = useDocumentSections({ sections: computed(() => design.value?.elements || []), selectedId: elementId,
-  locked: () => busy.value, limit: 40 });
-function duplicateElement() { sectionEngine.duplicate(); editorTab.value = 'content'; }
-const removeElement = sectionEngine.remove;
-function setZoom(value: number) { if (Number.isFinite(value)) { zoom.value = Math.max(0.25, Math.min(3, value)); fitPreview.value = false; } }
-function wheelZoom(event: WheelEvent) {
-  event.preventDefault(); if (stopPointer) return; changeZoom(event.deltaY < 0 ? 0.1 : -0.1);
-}
-function canvasShortcut(event: KeyboardEvent) {
-  if ((event.target as HTMLElement)?.closest('input, textarea, select, [contenteditable=true]') || busy.value) return;
-  if (event.key === '+' || event.key === '=') { event.preventDefault(); changeZoom(0.25); }
-  else if (event.key === '-') { event.preventDefault(); changeZoom(-0.25); }
-  else if (event.key === '0') { event.preventDefault(); fitPreview.value = true; }
-  else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicateElement(); }
-  else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); removeElement(); }
-  else if (design.value?.kind === 'receipt' && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !(event.target as HTMLElement)?.closest('.resize-handle') && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) && element.value) {
-    event.preventDefault();
-    const step = event.shiftKey ? 1 : 0.1;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') element.value.x = Math.max(0, Math.min(design.value.width - element.value.width, Math.round((element.value.x + (event.key === 'ArrowLeft' ? -step : step)) * 10) / 10));
-    else if (element.value.placement === 'absolute') element.value.y = Math.max(0, Math.min((design.value.paperSize ? design.value.height : canvasHeight.value) - element.value.height, element.value.y + (event.key === 'ArrowUp' ? -step : step)));
-    else element.value.gapBefore = Math.max(0, Math.min(300, Math.round(((element.value.gapBefore || 0) + (event.key === 'ArrowUp' ? -step : step)) * 10) / 10));
-  }
-}
-function alignBox(alignment: 'left' | 'center' | 'right') {
-  if (!element.value || !design.value || busy.value) return;
-  const space = Math.max(0, design.value.width - element.value.width);
-  element.value.x = alignment === 'left' ? 0 : alignment === 'right' ? space : space / 2;
-}
-function panCanvas(event: PointerEvent) {
-  if (event.button !== 0 && event.button !== 1 || (event.target as HTMLElement).closest('.preview-hit-area, .resize-handle')) return;
-  const viewport = previewViewport.value!;
-  event.preventDefault(); viewport.setPointerCapture(event.pointerId);
-  const left = viewport.scrollLeft, top = viewport.scrollTop;
-  const move = (next: PointerEvent) => { viewport.scrollLeft = left - next.clientX + event.clientX; viewport.scrollTop = top - next.clientY + event.clientY; };
-  const stop = () => {
-    viewport.removeEventListener('pointermove', move); viewport.removeEventListener('pointerup', stop); viewport.removeEventListener('pointercancel', stop); viewport.removeEventListener('lostpointercapture', stop);
-    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-    stopPointer = undefined;
-  };
-  stopPointer?.(); stopPointer = stop;
-  viewport.addEventListener('pointermove', move); viewport.addEventListener('pointerup', stop); viewport.addEventListener('pointercancel', stop); viewport.addEventListener('lostpointercapture', stop);
-}
-function startReceiptGesture(event: PointerEvent, id: string, handle?: ResizeHandle) {
-  if (!design.value || busy.value || event.button !== 0 || !previewBox.value) return;
-  stopPointer?.(); event.preventDefault(); event.stopPropagation(); selectElement(id);
-  const item = element.value!, paper = design.value;
-  const target = event.currentTarget as HTMLElement;
-  target.focus({ preventScroll: true }); target.setPointerCapture(event.pointerId);
-  const original = { x: item.x, y: 0, width: item.width, height: item.height, gapBefore: item.gapBefore };
-  const pixelScale = previewBox.value.getBoundingClientRect().width / paper.width;
-  history.begin();
-  const movePointer = (next: PointerEvent) => {
-    if (next.pointerId !== event.pointerId) return;
-    const dx = (next.clientX - event.clientX) / pixelScale, dy = (next.clientY - event.clientY) / pixelScale;
-    if (handle) {
-      const resized = resizeLabelBox(original, handle, dx, dy, { width: paper.width, height: 100 });
-      Object.assign(item, { x: resized.x, width: resized.width, height: resized.height });
-    } else {
-      item.x = Math.max(0, Math.min(paper.width - item.width, Math.round((original.x + dx) * 10) / 10));
-      item.gapBefore = Math.max(0, Math.min(300, Math.round(((original.gapBefore || 0) + dy) * 10) / 10));
-    }
-  };
-  const stop = (end?: Event) => {
-    target.removeEventListener('pointermove', movePointer); target.removeEventListener('pointerup', stop);
-    target.removeEventListener('pointercancel', stop); target.removeEventListener('lostpointercapture', stop);
-    if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-    if (end?.type !== 'pointerup') Object.assign(item, { x: original.x, width: original.width, height: original.height, gapBefore: original.gapBefore });
-    stopPointer = undefined; history.end();
-  };
-  stopPointer = stop;
-  target.addEventListener('pointermove', movePointer); target.addEventListener('pointerup', stop);
-  target.addEventListener('pointercancel', stop); target.addEventListener('lostpointercapture', stop);
-}
-const resizeLabels: Record<ResizeHandle, string> = { nw: 'top-left corner', n: 'top edge', ne: 'top-right corner', e: 'right edge', se: 'bottom-right corner', s: 'bottom edge', sw: 'bottom-left corner', w: 'left edge' };
-let stopPointer: (() => void) | undefined;
-const fields = computed(() => design.value?.kind === 'label' ? labelFields : receiptFields);
-const availableVariables = computed(() => design.value?.kind === 'label'
-  ? [...labelVariables, ...customVariables.value, ...labelFields.map(key => ({ key, label: friendlyField(key), group: 'Existing label fields', sample: '' }))]
-  : receiptFields.map(key => ({ key, label: friendlyField(key), group: 'Receipt', sample: '' })));
-const variableGroups = computed(() => {
-  const query = variableSearch.value.trim().toLowerCase();
-  const matches = availableVariables.value.filter(v => `${v.group} ${v.label} ${v.key}`.toLowerCase().includes(query));
-  return [...new Set(matches.map(v => v.group))].map(group => ({ group, variables: matches.filter(v => v.group === group) }));
-});
-const selectedVariable = computed(() => availableVariables.value.find(v => v.key === element.value?.field));
-function chooseVariable(key: string) {
-  if (!element.value) return;
-  element.value.field = key; variablePickerOpen.value = false; variableSearch.value = '';
-}
-async function loadCustomVariables() {
-  variableError.value = '';
-  try { customVariables.value = await $fetch<LabelVariable[]>('/api/settings/label-variables'); }
-  catch { variableError.value = 'Custom fields could not be loaded.'; }
-}
-const dirty = computed(() => saved.value !== JSON.stringify(settings.value));
-const previewZoom = computed(() => {
-  if (!fitPreview.value || !design.value || !viewportSize.value.width) return zoom.value;
-  // Receipts grow with their items. Fit their width and scroll vertically so
-  // longer receipts remain readable; fixed-size labels still fit both axes.
-  if (design.value.kind === 'receipt') return Math.max(0.1, Math.min(2, viewportSize.value.width / (design.value.width * 4)));
-  return Math.max(0.1, Math.min(3, viewportSize.value.width / (design.value.width * 4), viewportSize.value.height / (canvasHeight.value * 4)));
-});
-function changeZoom(delta: number) {
-  zoom.value = Math.max(0.25, Math.min(3, previewZoom.value + delta));
-  fitPreview.value = false;
-}
-function selectElement(id: string) { elementId.value = id; editorTab.value = 'content'; }
-const fieldLabels: Record<string, string> = { labelVariantSize: 'Variant name and size', code: 'Variant code', dprice: 'Discounted price', taxsummary: 'Tax summary', receiptDiscount: 'Discount / round off', receiptSavings: 'Savings', receiptDate: 'Receipt date', receiptUpiPayment: 'Receipt UPI payment', shopname: 'Shop name', sprice: 'Selling price', mrp: 'MRP', gstin: 'GST number', barcode: 'Barcode' };
-const friendlyField = (field: string) => fieldLabels[field] || field.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, s => s.toUpperCase());
-const elementName = (e: PrintElement) => e.type === 'logo' ? 'Image' : e.type === 'field' ? availableVariables.value.find(v => v.key === e.field)?.label || friendlyField(e.field || 'Variable') : e.type === 'text' ? e.text || 'Text' : e.type === 'qrcode' ? 'QR code' : e.type === 'items' ? 'Table' : friendlyField(e.type);
-const printer = usePrint();
-const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
-let generation = 0;
-let timer: ReturnType<typeof setTimeout> | undefined;
 async function load() {
-  choosingReceiptBase.value = false;
-  loading.value = true; error.value = '';
-  const companyId = companyScope.auth.session.value?.companyId;
+  const version = ++loadVersion; loading.value = true; error.value = ''
   try {
-    settings.value = await $fetch<PrintSettings>('/api/settings/print-templates');
-    cachePrintSettings(companyId, settings.value);
-    for (const template of settings.value.templates) {
-      if (template.kind === 'receipt' && template.name === 'Classic Tax Receipt') template.name = 'Tax Receipt';
+    await scope.ready
+    ownerId.value = scope.auth.session.value?.companyId || ''
+    const fresh = printSettingsSchema.parse(await $fetch<PrintSettings>('/api/settings/print-templates'))
+    if (version !== loadVersion) return
+    const pending = drafts.value[companyId.value]
+    const hasPendingChanges = pending && JSON.stringify(pending.settings) !== pending.saved
+    settings.value = printSettingsSchema.parse(hasPendingChanges ? pending.settings : fresh); saved.value = hasPendingChanges ? pending.saved : JSON.stringify(fresh)
+    selectedId.value = props.workspace ? props.templateId || '' : pending?.selectedId || settings.value.templates[0]?.id || ''
+    history.reset(); previewData.value = null; cachePrintSettings(companyId.value, fresh)
+    if (props.workspace && canSave.value && design.value) {
+      const upgraded = design.value.kind === 'label' ? upgradeLabelToolTemplate(design.value) : upgradeReceiptToolTemplate(design.value)
+      if (upgraded !== design.value) {
+        history.begin(); settings.value.templates.splice(settings.value.templates.findIndex(t => t.id === upgraded.id), 1, upgraded); history.end()
+        message.value = upgraded.kind === 'label' ? 'Updated this label with Arial and an editable barcode value. Save design to keep it, or use Undo to restore the previous layout.' : 'Updated this receipt to editable layers. Save design to keep it, or use Undo to restore the previous layout.'
+      }
     }
-    saved.value = JSON.stringify(settings.value);
-    selectedId.value = settings.value.templates[0]?.id || '';
-    history.reset();
-  } catch (err: any) { error.value = err?.data?.statusMessage || 'Could not load print designs. Please retry.'; }
-  finally { loading.value = false; }
+    if (props.workspace && (!design.value || design.value.kind !== props.templateKind)) error.value = 'This design is unavailable. Return to Printer Settings to choose a design.'
+  } catch (cause: any) { if (version === loadVersion) error.value = cause?.data?.statusMessage || cause.message || 'Could not load print designs.' }
+  finally { if (version === loadVersion) loading.value = false }
 }
-onMounted(load);
-onMounted(loadCustomVariables);
-watch(elementId, () => { variablePickerOpen.value = false; variableSearch.value = ''; });
-onBeforeUnmount(() => { stopPointer?.(); clearTimeout(timer); generation++; viewportObserver?.disconnect(); });
-watch(selectedId, () => { elementId.value = design.value?.elements[0]?.id || ''; message.value = ''; });
-watch([design, sampleReceipt, sampleLabel], () => {
-  const run = ++generation;
-  clearTimeout(timer);
-  rendering.value = true; previewError.value = '';
-  if (!design.value) { preview.value = ''; previewBounds.value = []; rendering.value = false; return; }
-  timer = setTimeout(async () => {
-    try {
-      const t = clone(design.value!);
-      const checked = printSettingsSchema.safeParse(settings.value);
-      if (!checked.success) throw new Error(checked.error.issues[0]?.message);
-      const rendered = await renderPrintTemplate(t, t.kind === 'receipt' ? sampleReceipt.value : sampleLabel.value);
-      if (run !== generation) return;
-      preview.value = rendered.canvas.toDataURL('image/png'); previewHeight.value = rendered.height; previewBounds.value = rendered.bounds;
-    } catch (err: any) { if (run === generation) { previewError.value = err.message; preview.value = ''; previewBounds.value = []; } }
-    finally { if (run === generation) rendering.value = false; }
-  }, 120);
-}, { deep: true });
+async function loadCustomVariables() { variableError.value = ''; try { customVariables.value = await $fetch<LabelVariable[]>('/api/settings/label-variables') } catch { variableError.value = 'Custom fields could not be loaded.' } }
+async function chooseReceiptBase(event: Event) { receiptChooserTrigger = event.currentTarget as HTMLElement; choosingReceiptBase.value = true; await nextTick(); receiptBaseChooser.value?.focus() }
+async function cancelReceiptBase() { choosingReceiptBase.value = false; await nextTick(); receiptChooserTrigger?.focus() }
+function openEditor() {
+  if (!design.value) return
+  retain()
+  return navigateTo({ path: `/print-design/${design.value.kind}/${encodeURIComponent(design.value.id)}`, query: { entryCompany: companyId.value } })
+}
 function create(kind: 'receipt' | 'label', base: 'tax' | 'no-tax' = 'tax') {
-  if (busy.value || settings.value.templates.length >= 12) return;
-  choosingReceiptBase.value = false;
-  editorTab.value = 'setup'; fitPreview.value = true;
-  const template = kind === 'receipt' ? { ...(base === 'no-tax' ? noTaxReceiptTemplate() : classicReceiptTemplate()), id: crypto.randomUUID(), name: base === 'no-tax' ? 'My No Tax Receipt' : 'My Tax Receipt' } : defaultTemplate(kind);
-  settings.value.templates.push(template); selectedId.value = template.id;
-  editorOpen.value = true; zoom.value = kind === 'label' ? 2 : 1;
+  if (busy.value || settings.value.templates.length >= 12) return
+  const template = kind === 'label' ? defaultTemplate(kind) : { ...(base === 'no-tax' ? noTaxReceiptTemplate() : classicReceiptTemplate()), id: crypto.randomUUID(), name: base === 'no-tax' ? 'My No Tax Receipt' : 'My Tax Receipt' }
+  settings.value.templates.push(template); selectedId.value = template.id; choosingReceiptBase.value = false; return openEditor()
 }
-const receiptStyle = computed(() => design.value?.elements.some(e => e.type === 'taxsummary') ? 'tax' : 'taxless');
-function applyClassic(mode: 'tax' | 'taxless' = 'tax') {
-  if (design.value?.kind !== 'receipt') return;
-  const base = mode === 'taxless' ? taxlessReceiptTemplate() : classicReceiptTemplate();
-  const preset = design.value.paperSize ? resizePrintPaper(base, design.value.width, design.value.height) : base;
-  if (['Classic Tax Receipt', 'Tax Receipt', 'Taxless Receipt'].includes(design.value.name)) design.value.name = preset.name;
-  Object.assign(design.value, { width: preset.width, height: preset.height, paperSize: preset.paperSize, fontFamily: preset.fontFamily, elements: preset.elements });
-  elementId.value = preset.elements[0].id; fitPreview.value = true;
-}
-function edit(id: string) {
-  receiptChooserTrigger = null;
-  editorTab.value = 'setup'; fitPreview.value = true;
-  selectedId.value = id;
-  editorOpen.value = true;
-  zoom.value = design.value?.kind === 'label' ? 2 : 1;
-}
-function resetLabelLayout() {
-  if (design.value?.kind !== 'label') return;
-  const base = originalLabelTemplate();
-  Object.assign(design.value, { width: base.width, height: base.height, fontFamily: base.fontFamily, elements: base.elements });
-  elementId.value = base.elements[0].id; fitPreview.value = true;
-}
-const designTemplates = computed(() => [
-  ...(design.value?.kind === 'label' ? [{ value: 'base:label', label: 'Standard product label' }] : [{ value: 'base:tax', label: 'Tax receipt' }, { value: 'base:taxless', label: 'No Tax receipt' }]),
-  ...settings.value.templates.filter(t => t.kind === design.value?.kind && t.id !== design.value?.id).map(t => ({ value: `saved:${t.id}`, label: t.name })),
-]);
-const designPapers = computed(() => [{ value: '', label: 'Custom size' }, ...paperSizes.value.map(size => ({ label: size.label, value: 'height' in size ? `${size.width}x${size.height}` : String(size.width) }))]);
-function applyDesignTemplate(value: string) {
-  if (busy.value || !design.value) return;
-  history.begin();
-  if (value === 'base:label') resetLabelLayout();
-  else if (value === 'base:tax' || value === 'base:taxless') applyClassic(value === 'base:tax' ? 'tax' : 'taxless');
-  else {
-    const source = settings.value.templates.find(t => `saved:${t.id}` === value && t.kind === design.value!.kind);
-    if (source) { const { id, name } = design.value; Object.assign(design.value, clone(source), { id, name }); elementId.value = design.value.elements[0].id; }
-  }
-  fitPreview.value = true; history.end();
-}
-function addCustomSection(section: CustomDocumentSection) {
-  if (busy.value || !design.value || design.value.elements.length >= 40) return;
-  history.begin(); add('text'); Object.assign(element.value!, section);
-  if (design.value.kind === 'label') element.value!.height = Math.min(design.value.height - element.value!.y, 100);
-  editorTab.value = 'content'; history.end();
-}
-function duplicate() {
-  if (!design.value) return;
-  const copy = clone(design.value); copy.id = crypto.randomUUID(); copy.name = `${copy.name.slice(0, 70)} copy`;
-  settings.value.templates.push(copy); selectedId.value = copy.id;
-}
-function removeDesign() {
-  const id = selectedId.value;
-  if (settings.value.receiptId === id) settings.value.receiptId = null;
-  if (settings.value.labelId === id) settings.value.labelId = null;
-  settings.value.templates = settings.value.templates.filter(t => t.id !== id);
-  selectedId.value = settings.value.templates[0]?.id || '';
-}
-function add(type: PrintElement['type']) {
-  if (!design.value) return;
-  const e = newElement(type, design.value.width);
-  if (type === 'logo') { e.width = Math.min(50, design.value.width - 4); e.height = 20; if (design.value.kind === 'receipt') e.placement = 'absolute'; }
-  if (type === 'field') e.field = design.value.kind === 'label' ? 'product.name' : fields.value[0];
-  if (type === 'barcode' || type === 'qrcode') e.field = design.value.kind === 'label' ? 'barcode' : 'invoiceNumber';
-  if (design.value.kind === 'label') e.height = Math.min(e.height, design.value.height - e.y);
-  design.value.elements.push(e); elementId.value = e.id;
-}
-function move(index: number, change: number) {
-  const id = design.value?.elements[index]?.id; if (id) sectionEngine.move(id, change);
-}
-let dragged = '';
-function drop(index: number) {
-  const target = design.value?.elements[index]?.id;
-  if (target) sectionEngine.drop(dragged, target); dragged = '';
-}
-function startMove(event: PointerEvent, id: string, handle?: ResizeHandle) {
-  if (design.value?.kind === 'receipt' && design.value.elements.find(e => e.id === id)?.placement !== 'absolute') { startReceiptGesture(event, id, handle); return; }
-  if (!design.value || busy.value || event.button !== 0 || !previewBox.value) return;
-  stopPointer?.();
-  event.preventDefault(); event.stopPropagation(); selectElement(id);
-  const e = element.value!;
-  const box = previewBox.value!.getBoundingClientRect();
-  if (!box.width || !box.height) return;
-  const target = event.currentTarget as HTMLElement;
-  target.focus({ preventScroll: true });
-  target.setPointerCapture(event.pointerId);
-  history.begin();
-  const startX = event.clientX, startY = event.clientY;
-  const original = { x: e.x, y: e.y, width: e.width, height: e.height };
-  const width = design.value.width, height = design.value.kind === 'receipt' && !design.value.paperSize ? canvasHeight.value : design.value.height;
-  const movePointer = (next: PointerEvent) => {
-    if (next.pointerId !== event.pointerId || busy.value) return;
-    const dx = (next.clientX - startX) * width / box.width;
-    const dy = (next.clientY - startY) * canvasHeight.value / box.height;
-    if (handle) Object.assign(e, resizeLabelBox(original, handle, dx, dy, { width, height }));
-    else {
-      e.x = Math.max(0, Math.min(width - e.width, Math.round((original.x + dx) * 10) / 10));
-      e.y = Math.max(0, Math.min(height - e.height, Math.round((original.y + dy) * 10) / 10));
-    }
-  };
-  const stop = () => {
-    target.removeEventListener('pointermove', movePointer); target.removeEventListener('pointerup', stop);
-    target.removeEventListener('pointercancel', stop); target.removeEventListener('lostpointercapture', stop);
-    if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-    stopPointer = undefined;
-    history.end();
-  };
-  stopPointer = stop;
-  target.addEventListener('pointermove', movePointer); target.addEventListener('pointerup', stop);
-  target.addEventListener('pointercancel', stop); target.addEventListener('lostpointercapture', stop);
-}
-function resizeWithKeyboard(event: KeyboardEvent, handle: ResizeHandle) {
-  if (!element.value || !design.value || busy.value || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-  event.preventDefault();
-  const step = event.shiftKey ? 1 : 0.1;
-  const receipt = design.value.kind === 'receipt' && element.value.placement !== 'absolute';
-  const resized = resizeLabelBox(receipt ? { ...element.value, y: 0 } : element.value, handle,
-    event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0,
-    event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0, receipt ? { width: design.value.width, height: 100 } : design.value);
-  Object.assign(element.value, receipt ? { x: resized.x, width: resized.width, height: resized.height } : resized);
-}
-function moveWithKeyboard(event: KeyboardEvent) {
-  if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || busy.value || stopPointer || design.value?.kind !== 'label' || !element.value) return;
-  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-  if ((event.target as HTMLElement)?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], .resize-handle')) return;
-  event.preventDefault(); event.stopPropagation();
-  const step = event.shiftKey ? 1 : 0.1;
-  const box = element.value;
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    box.x = Math.max(0, Math.min(design.value.width - box.width, Math.round((box.x + (event.key === 'ArrowLeft' ? -step : step)) * 10) / 10));
-  } else {
-    box.y = Math.max(0, Math.min(design.value.height - box.height, Math.round((box.y + (event.key === 'ArrowUp' ? -step : step)) * 10) / 10));
-  }
-}
-async function upload(event: Event) {
-  const input = event.target as HTMLInputElement, file = input.files?.[0], target = element.value, paper = design.value;
-  if (!file || !target || !paper || busy.value) return;
-  error.value = ''; busy.value = true;
-  try {
-    const image = await prepareDesignerImage(file);
-    target.image = image.data;
-    target.height = Math.max(2, Math.min(100, paper.kind === 'label' ? paper.height - target.y : paper.paperSize ? paper.height - target.y : 100, target.width * image.height / image.width));
-  } catch (err: any) { error.value = err.message || 'Could not add the image.'; }
-  finally { input.value = ''; busy.value = false; }
-}
+function edit(id: string) { selectedId.value = id; return openEditor() }
+watch(selectedId, () => { previewData.value = null })
+function selectDesign(id: string) { selectedId.value = id; return openEditor() }
+function closeEditor() { if (busy.value) return; retain(); return navigateTo(drafts.value[companyId.value]?.returnTo || `/settings/printer?entryCompany=${encodeURIComponent(companyId.value)}`) }
 async function save() {
-  const companyId = companyScope.auth.session.value?.companyId;
-  stopPointer?.();
-  error.value = ''; message.value = '';
-  const checked = printSettingsSchema.safeParse(settings.value);
-  if (!checked.success) { error.value = checked.error.issues[0]?.message || 'Check the design settings'; return; }
-  busy.value = true;
+  if (busy.value || !canSave.value) return
+  error.value = ''; message.value = ''; busy.value = true
   try {
-    // Validate every design with sample data before making any one a company default.
-    for (const t of checked.data.templates) await renderPrintTemplate(t, t.kind === 'receipt' ? sampleReceipt.value : sampleLabel.value);
-    settings.value = await $fetch<PrintSettings>('/api/settings/print-templates', { method: 'PUT', body: checked.data });
-    saved.value = JSON.stringify(settings.value); message.value = 'Designs saved for this company.';
-    history.reset();
-    cachePrintSettings(companyId, settings.value);
-  } catch (err: any) { error.value = err?.data?.statusMessage || err.message || 'Could not save designs'; }
-  finally { busy.value = false; }
+    const checked = printSettingsSchema.parse(settings.value)
+    for (const t of checked.templates) await renderPrintTemplate(t, t.kind === 'label' ? sampleLabel.value : { ...sampleReceipt.value, entries: sampleReceipt.value.entries })
+    settings.value = printSettingsSchema.parse(await $fetch<PrintSettings>('/api/settings/print-templates', { method: 'PUT', body: checked }))
+    saved.value = JSON.stringify(settings.value); history.reset(); retain(); cachePrintSettings(companyId.value, settings.value); message.value = 'Designs saved for this company.'
+  } catch (cause: any) { error.value = cause?.data?.statusMessage || cause.message || 'Could not save designs.' }
+  finally { busy.value = false }
 }
-async function output(mode: 'pdf' | 'print') {
-  if (!design.value) return;
-  error.value = ''; message.value = ''; busy.value = true;
+async function output(mode: 'pdf' | 'print', preset = false) {
+  const t = preset ? presetData.value.printTemplate : design.value
+  if (!t || busy.value) return
+  busy.value = true; error.value = ''; message.value = ''
   try {
-    const t = clone(design.value), data = t.kind === 'receipt' ? sampleReceipt.value : sampleLabel.value;
-    if (mode === 'pdf') await downloadTemplatePDF(t, data, `${t.kind}-sample.pdf`);
-    else if (t.kind === 'receipt') await printer.printBill(data, t);
-    else await printer.printLabel([data], `${t.width}x${t.height}mm`, t);
-    if (mode === 'print') message.value = t.kind === 'label' ? 'Sample sent to the label printer.' : 'Receipt print requested.';
-  } catch (err: any) { error.value = err.message || 'Could not print the design'; }
-  finally { busy.value = false; }
+    const data = preset ? presetData.value : previewData.value || (t.kind === 'receipt' ? sampleReceipt.value : sampleLabel.value)
+    if (mode === 'pdf') await downloadTemplatePDF(t, data, `${t.kind}-sample.pdf`)
+    else if (t.kind === 'receipt') await printer.printBill(data, t)
+    else await printer.printLabel([data], `${t.width}x${t.height}mm`, t)
+    if (mode === 'print') message.value = 'Sample print requested.'
+  } catch (cause: any) { error.value = cause.message || 'Could not output the design.' } finally { busy.value = false }
 }
-function discard() { choosingReceiptBase.value = false; stopPointer?.(); settings.value = JSON.parse(saved.value); history.reset(); selectedId.value = settings.value.templates[0]?.id || ''; editorOpen.value = false; error.value = ''; message.value = ''; }
-function restoreHistory(direction: 'undo' | 'redo') {
-  if (busy.value || loading.value) return;
-  stopPointer?.();
-  history[direction]();
-  if (!design.value) selectedId.value = settings.value.templates[0]?.id || '';
-  if (!element.value) elementId.value = design.value?.elements[0]?.id || '';
-  error.value = ''; message.value = '';
-}
-function historyShortcut(event: KeyboardEvent) {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing) return;
-  if ((event.target as HTMLElement)?.closest('[data-history-ignore]')) return;
-  const key = event.key.toLowerCase();
-  if (key !== 'z' && key !== 'y') return;
-  event.preventDefault(); event.stopPropagation();
-  restoreHistory(key === 'y' || event.shiftKey ? 'redo' : 'undo');
-}
+const presetOutput = (mode: 'pdf' | 'print') => output(mode, true)
+function discard() { if (busy.value) return; settings.value = JSON.parse(saved.value); history.reset(); selectedId.value = settings.value.templates[0]?.id || ''; error.value = ''; message.value = ''; retain() }
+function restoreHistory(direction: 'undo' | 'redo') { if (!busy.value) { history[direction](); error.value = ''; message.value = '' } }
+onMounted(() => { load(); loadCustomVariables() })
+onBeforeUnmount(() => { loadVersion++; retain() })
 </script>
 
 <template>
-  <section class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600 designer">
+  <PrintEditor v-if="workspace && !loading && canSave && design && design.kind === templateKind" :settings="settings" :selected-id="selectedId" :saved="saved" :busy="busy" :can-save="canSave" :error="error" :message="message" :sample-label="sampleLabel" :sample-receipt="sampleReceipt" :variables="customVariables" :variable-error="variableError" @close="closeEditor" @save="save" @output="output" @history="restoreHistory" @gesture="active => active ? history.begin() : history.end()" @select="selectDesign" @retry-variables="loadCustomVariables" @preview-data="previewData = $event" />
+  <main v-else-if="workspace" class="print-page-state" :aria-busy="loading"><p v-if="loading" role="status">Loading print design...</p><p v-else role="alert">{{ !canSave ? 'Administrators and managers can edit print designs.' : error || 'This design is unavailable.' }}</p><div><button type="button" :disabled="busy" @click="closeEditor">Back</button><button v-if="!loading && canSave" type="button" @click="load">Retry</button></div></main>
+  <section v-else class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600 designer">
     <h2 class="text-lg font-semibold">Receipt &amp; Label Designer</h2>
     <p class="text-sm text-gray-500 mb-4">Create and customize receipts and product labels for your company.</p>
     <p v-if="loading" role="status">Loading print designs…</p>
@@ -528,7 +123,7 @@ function historyShortcut(event: KeyboardEvent) {
         <div class="design-toolbar-actions">
           <span class="save-status" role="status">{{ dirty ? 'Unsaved changes' : 'All changes saved' }}</span>
           <UButton v-if="dirty" label="Discard changes" variant="soft" :disabled="busy" @click="discard" />
-          <UButton label="Save designs" :loading="busy" :disabled="!canSave || !dirty || !!previewError" @click="save" />
+          <UButton label="Save designs" :loading="busy" :disabled="!canSave || !dirty" @click="save" />
         </div>
       </div>
       <p v-if="!canSave" class="text-sm mb-3">An administrator or manager can save company designs.</p>
@@ -575,170 +170,14 @@ function historyShortcut(event: KeyboardEvent) {
       <div class="section-heading"><div><h3>Your designs</h3><p>Open a receipt or product label to edit it.</p></div></div>
       <p v-if="!libraryTemplates.length" class="empty-designs">No custom designs yet. Choose New receipt or New label to create one.</p>
       <div v-else class="template-library">
-        <button v-for="t in libraryTemplates" :key="t.id" type="button" class="template-card" :class="{ 'template-card-selected': editorOpen && t.id === selectedId }" :disabled="busy" @click="edit(t.id)">
+        <button v-for="t in libraryTemplates" :key="t.id" type="button" class="template-card" :class="{ 'template-card-selected': t.id === selectedId }" :disabled="busy" @click="edit(t.id)">
           <span class="template-card-icon" aria-hidden="true">{{ t.kind === 'label' ? '▤' : '▥' }}</span>
           <span class="template-card-description"><strong>{{ t.name }}<small v-if="settings.receiptId === t.id || settings.labelId === t.id" class="default-badge">Default</small></strong><span>{{ t.kind === 'label' ? `${t.width} × ${t.height} mm label` : `${t.width} mm receipt` }} · {{ t.dpi }} DPI</span></span>
           <span class="template-card-link">Edit {{ t.kind }} →</span>
         </button>
       </div>
       <details class="printer-help"><summary>Printer setup tips</summary><p>Match the printable width and resolution to your printer. Connect and assign your WebUSB printers above. Saved company defaults are used by billing and product printing.</p></details>
-      <div @keydown.capture="historyShortcut" @keydown="moveWithKeyboard($event); canvasShortcut($event)">
-      <PrinterDesignerWorkspace v-if="design" :fullscreen="true" :kind="design.kind" :open="editorOpen" :title="design.name || `Untitled ${design.kind}`" :busy="busy" :dirty="dirty" @close="closeEditor">
-        <template #actions>
-          <UButton label="Download PDF" variant="soft" :disabled="busy || rendering || !preview || !!previewError" @click="output('pdf')" />
-          <UButton label="Test print" variant="soft" :disabled="busy || rendering || !preview || !!previewError" @click="output('print')" />
-          <div v-if="design.kind === 'receipt'" class="receipt-style" role="group" aria-label="Receipt template">
-            <button type="button" :disabled="busy" :aria-pressed="receiptStyle === 'tax'" @click="applyClassic('tax')">Tax</button>
-            <button type="button" :disabled="busy" :aria-pressed="receiptStyle === 'taxless'" @click="applyClassic('taxless')">Taxless</button>
-          </div>
-          <UButton label="Undo" title="Undo (Ctrl+Z)" variant="soft" :disabled="busy || !canUndo" @click="restoreHistory('undo')" />
-          <UButton label="Redo" title="Redo (Ctrl+Y)" variant="soft" :disabled="busy || !canRedo" @click="restoreHistory('redo')" />
-          <UButton label="Save designs" :loading="busy" :disabled="!canSave || !dirty || !!previewError" @click="save" />
-        </template>
-        <div class="designer designer-workspace">
-        <p v-if="error" role="alert" class="text-red-600 mb-3">{{ error }}</p>
-        <p v-if="message" role="status" class="text-green-700 mb-3">{{ message }}</p>
-        <div class="editor-layout">
-        <fieldset :disabled="busy" class="editor-sidebar min-w-0">
-          <div class="editor-tabs" aria-label="Editor controls">
-            <button type="button" data-editor-tab="setup" :aria-pressed="editorTab === 'setup'" @click="editorTab = 'setup'">{{ design.kind === 'label' ? 'Label setup' : 'Receipt setup' }}</button>
-            <button type="button" data-editor-tab="content" :aria-pressed="editorTab === 'content'" @click="editorTab = 'content'">Content <span>{{ design.elements.length }}</span></button>
-          </div>
-          <div class="controls-scroll">
-          <div v-show="editorTab === 'setup'" class="setup-controls">
-            <div class="control-heading"><p v-if="design.kind === 'label'">New labels start with the original label layout. Edit any item in Content.</p><h3>Paper &amp; design</h3><p>{{ design.kind === 'receipt' ? 'Choose a thermal roll or a sheet size such as A4. Sheets print through the system print dialog or PDF.' : 'Set your label size to match the paper in your printer.' }}</p></div>
-            <label>Design name<input v-model="design.name" maxlength="80" /></label>
-            <label>Typeface<select v-model="design.fontFamily"><option :value="undefined">Standard</option><option value="thermal">Condensed thermal</option></select></label>
-            <DesignerTools :templates="designTemplates" :papers="designPapers" :paper="paperPresetValue" :disabled="busy" :limit-reached="design.elements.length >= 40" @template="applyDesignTemplate" @paper="setPaperSize" @section="addCustomSection" />
-            <div class="control-grid three-columns">
-              <label>Width (mm)<input :value="design.width" @change="setPaperSize(`${Number(($event.target as HTMLInputElement).value)}x${design.height}`)" type="number" min="25" :max="design.paperSize ? 216 : 100" step="1" /></label>
-              <label v-if="design.kind === 'label'">Height (mm)<input :value="design.height" @change="setPaperSize(`${design.width}x${Number(($event.target as HTMLInputElement).value)}`)" type="number" min="15" max="150" step="1" /></label>
-              <label>Resolution<select v-model="design.dpi"><option value="203">203 DPI</option><option value="300">300 DPI</option></select></label>
-            </div>
-            <label v-if="design.kind === 'label'" class="default-choice"><input type="checkbox" :checked="settings.labelId === design.id" @change="settings.labelId = settings.labelId === design.id ? null : design.id" /> Use as default product label</label>
-            <label v-else class="default-choice"><input type="checkbox" :checked="settings.receiptId === design.id" @change="settings.receiptId = settings.receiptId === design.id ? CLASSIC_RECEIPT_ID : design.id" /> Use as default receipt</label>
-            <div class="design-actions"><UButton v-if="design.kind === 'label'" label="Use original label layout" variant="soft" @click="resetLabelLayout" /><UButton v-if="design.kind === 'receipt'" label="Use photo layout" variant="soft" @click="applyClassic()" /><UButton label="Duplicate" variant="soft" :disabled="settings.templates.length >= 12" @click="duplicate" /><UButton label="Delete design" variant="soft" color="red" @click="removeDesign" /></div>
-          </div>
-          <div v-show="editorTab === 'content'" class="content-controls">
-            <div class="control-heading"><h3>What goes on your {{ design.kind }}?</h3><p>Select an item below or click it in the preview to edit.</p></div>
-            <DesignerTools :templates="designTemplates" :papers="designPapers" :paper="paperPresetValue" :disabled="busy" :limit-reached="design.elements.length >= 40" @template="applyDesignTemplate" @paper="setPaperSize" @section="addCustomSection" /><div class="add-tools" aria-label="Add content">
-              <UButton v-for="type in (design.kind === 'receipt' ? ['text', 'field', 'items', 'taxsummary', 'spacer', 'line', 'barcode', 'qrcode', 'logo'] : ['text', 'field', 'line', 'barcode', 'qrcode', 'logo'])" :key="type" :label="type === 'logo' ? '+ Image' : type === 'items' ? '+ Table' : type === 'field' ? '+ Variable' : type === 'qrcode' ? '+ QR code' : '+ ' + friendlyField(type)" variant="outline" size="sm" :disabled="design.elements.length >= 40" @click="add(type as PrintElement['type'])" />
-            </div>
-            <div class="content-body">
-            <div class="element-list">
-              <div v-for="(e, i) in design.elements" :key="e.id" class="element-row" :class="{ 'element-selected': elementId === e.id }" draggable="true" @dragstart="dragged = e.id" @dragover.prevent @drop.prevent="drop(i)">
-                <button type="button" class="element-select" :title="elementName(e)" :aria-pressed="elementId === e.id" @click="selectElement(e.id)"><span class="element-number">{{ i + 1 }}</span><span>{{ elementName(e) }}</span></button>
-                <button type="button" :disabled="i === 0" aria-label="Move section up" @click="move(i, -1)">↑</button>
-                <button type="button" :disabled="i === design.elements.length - 1" aria-label="Move section down" @click="move(i, 1)">↓</button>
-              </div>
-            </div>
-            <div v-if="element" class="element-properties" :key="element.id">
-              <div class="properties-heading"><h3>{{ elementName(element) }}</h3><span>Selected item</span></div>
-              <div v-if="element.type === 'items'" class="table-controls">
-                <p>Each column has one heading and a variable for every bill item. Headings and values wrap automatically and share the same width and alignment.</p>
-                <UButton label="Use two-line item layout" variant="soft" @click="twoLineTable" />
-                <UButton v-if="!element.columns" label="Customize table columns" @click="customizeTable" />
-                <template v-else>
-                  <label>Find a column variable<input v-model="columnSearch" data-history-ignore type="search" placeholder="Product, brand, category, size…" /></label>
-                  <div v-for="(column, index) in element.columns" :key="column.id" class="table-column">
-                    <div class="table-column-heading"><strong>Column {{ index + 1 }}</strong><div>
-                      <button type="button" :disabled="index === 0" aria-label="Move column left" @click="moveColumn(index, -1)">←</button>
-                      <button type="button" :disabled="index === element.columns.length - 1" aria-label="Move column right" @click="moveColumn(index, 1)">→</button>
-                      <button type="button" :disabled="element.columns.length === 1" aria-label="Remove column" @click="element.columns.splice(index, 1)">Remove</button>
-                    </div></div>
-                    <label>Heading<textarea v-model="column.header" rows="2" maxlength="200" placeholder="Enter a heading; Enter adds a new line" /></label>
-                    <label>Row variable<select v-model="column.field"><option :value="column.field">{{ [...receiptTableVariables, ...customVariables].find(v => v.key === column.field)?.label || column.field }}</option><optgroup v-for="group in tableVariableGroups" :key="group.group" :label="group.group"><option v-for="variable in group.variables" :key="variable.key" :value="variable.key">{{ variable.label }}</option></optgroup></select></label>
-                    <div class="control-grid">
-                      <label>Layout line<select :value="column.line || 1" @change="column.line = Number(($event.target as HTMLSelectElement).value)"><option :value="1">Line 1</option><option :value="2">Line 2</option><option :value="3">Line 3</option></select></label>
-                      <ColumnWidth :model-value="columnPercent(index)" :maximum="100 - element.columns.filter(c => (c.line || 1) === (column.line || 1)).length + 1" @update:model-value="setColumnWidth(index, $event)" /><small>{{ (element.width * columnPercent(index) / 100).toFixed(1) }} mm</small>
-                      <label>Column alignment<select v-model="column.align"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-                    </div>
-                    <label>Text after value<input v-model="column.suffix" maxlength="20" placeholder="e.g. %" /></label>
-                    <label v-if="/^entry\.(qty|mrp|value|discount|discountAmount|tvalue)$/.test(column.field)" class="bold-choice"><input v-model="column.total" type="checkbox" /> Sum this column in totals row</label>
-                  </div>
-                  <UButton label="Add column" :disabled="element.columns.length >= 12" variant="outline" @click="addColumn" />
-                  <div class="control-grid">
-                    <TableProperties v-model="element.tableStyle" :defaults="{ cellPadding: element.tablePadding ?? .5, fontSize: element.fontSize, headerFontSize: element.fontSize, borderWidth: .17 }" />
-                    <label class="bold-choice"><input v-model="element.tableBorders" type="checkbox" /> Table borders</label>
-                    <label>Gap after each item (mm)<input v-model.number="element.tableItemGap" type="number" min="0" max="10" step="0.5" /></label>
-                    <label class="bold-choice"><input v-model="element.tableRules" type="checkbox" /> Header and footer rules</label>
-                    <label class="bold-choice"><input v-model="element.tableTotals" type="checkbox" /> Show totals row</label>
-                    <label class="bold-choice"><input :checked="element.tableHeaderBold !== false" type="checkbox" @change="element.tableHeaderBold = ($event.target as HTMLInputElement).checked" /> Bold headings</label>
-                  </div>
-                </template>
-              </div>
-              <div v-if="element.type === 'field' || element.type === 'barcode' || element.type === 'qrcode'" class="variable-control">
-                <span class="variable-label">Variable</span>
-                <button type="button" class="variable-trigger" :aria-expanded="variablePickerOpen" @click="variablePickerOpen = !variablePickerOpen">
-                  <span><small v-if="selectedVariable">{{ selectedVariable.group }}</small>{{ selectedVariable?.label || element.field || 'Choose a variable' }}</span><span aria-hidden="true">▾</span>
-                </button>
-                <div v-if="variablePickerOpen" class="variable-picker">
-                  <label>Find a variable<input v-model="variableSearch" data-history-ignore type="search" placeholder="Search company, category, size, supplier…" /></label>
-                  <div class="variable-results">
-                    <section v-for="group in variableGroups" :key="group.group"><h4>{{ group.group }}</h4><button v-for="variable in group.variables" :key="variable.key" type="button" :aria-pressed="element.field === variable.key" @click="chooseVariable(variable.key)">{{ variable.label }}</button></section>
-                    <p v-if="!variableGroups.length">No matching variables.</p>
-                  </div>
-                  <p v-if="variableError" class="variable-note">{{ variableError }} <button type="button" @click="loadCustomVariables">Retry</button></p>
-                  <button type="button" class="variable-clear" @click="chooseVariable('')">Use custom text only</button>
-                </div>
-                <p v-if="element.field" class="variable-note">Sample: {{ fieldValue(design.kind === 'label' ? sampleLabel : receiptData, element.field) || 'No value' }}</p>
-                <p v-if="element.field.startsWith('distributor') || element.field.startsWith('purchaseorder.')" class="variable-note">Uses the supplier linked to this product's purchase order. Blank when no supplier is linked.</p>
-              </div>
-              <TextProperties v-if="element.type === 'text'" v-model:text="element.text" v-model:heading="element.heading" v-model:border="element.border" :maxlength="2000" /><label v-if="['field', 'barcode', 'qrcode'].includes(element.type)">{{ element.field ? 'Text before field' : 'Text' }}<textarea v-model="element.text" rows="2" maxlength="2000" placeholder="Enter your text" /></label>
-              <label v-if="element.type === 'logo'">Image (PNG, JPEG or WebP, up to 10 MB)<input type="file" aria-label="Upload design image" accept="image/png,image/jpeg,image/webp" @change="upload" /></label>
-              <label v-if="design.kind === 'receipt' && element.type === 'logo'">Image placement<select :value="element.placement || 'flow'" aria-label="Image placement" @change="element.placement = ($event.target as HTMLSelectElement).value as 'flow' | 'absolute'"><option value="absolute">Anywhere on paper (drag to position)</option><option value="flow">In section order</option></select></label>
-              <div v-if="['text', 'field', 'items', 'taxsummary'].includes(element.type)" class="control-grid three-columns">
-                <label>Text size (pt)<input v-model.number="element.fontSize" type="number" min="6" max="32" /></label>
-                <label v-if="element.type !== 'items'">Alignment<select v-model="element.align"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-                <label class="bold-choice"><input v-model="element.bold" type="checkbox" /> Bold text</label>
-              </div>
-              <div v-if="design.kind === 'label'" class="control-grid">
-                <label>Show this item<select :value="element.visibility || 'always'" @change="element.visibility = ($event.target as HTMLSelectElement).value as PrintElement['visibility']"><option value="always">Always</option><option value="discount">Only when discounted</option><option value="no-discount">Only when not discounted</option></select></label>
-                <label v-if="['field', 'text'].includes(element.type)">Strike through<select :value="element.strikeThrough || 'never'" @change="element.strikeThrough = ($event.target as HTMLSelectElement).value as PrintElement['strikeThrough']"><option value="never">Never</option><option value="always">Always</option><option value="discount">Only when discounted</option></select></label>
-                <p class="variable-note">Discounted means the discounted price is lower than MRP. Add separate items with opposite rules for an if/else layout. Hidden items stay selectable here.</p>
-              </div>
-              <details class="position-controls">
-                <summary>Position &amp; size <span>mm</span></summary>
-                <div class="control-grid">
-                  <label>From left<input v-model.number="element.x" type="number" min="0" step="0.1" /></label>
-                  <label v-if="design.kind === 'label' || element.placement === 'absolute'">From top<input v-model.number="element.y" type="number" min="0" step="0.1" /></label>
-                  <label>Width<input v-model.number="element.width" type="number" min="2" step="0.1" /></label>
-                  <label v-if="design.kind === 'receipt' && element.placement !== 'absolute'">Space above (mm)<input v-model.number="element.gapBefore" type="number" min="0" max="300" step="0.5" /></label>
-                  <label v-if="design.kind === 'receipt'">Gap after section (mm)<input v-model.number="element.gapAfter" type="number" min="0" max="30" step="0.5" /></label>
-                  <label>{{ design.kind === 'receipt' ? 'Minimum height' : 'Height' }}<input v-model.number="element.height" type="number" min="2" step="0.1" /></label>
-                </div>
-              </details>
-              <label v-if="design.kind === 'receipt' && ['text', 'field'].includes(element.type)" class="bold-choice"><input v-model="element.inverse" type="checkbox" /> White text on black</label>
-              <UButton label="Remove element" color="red" variant="soft" size="xs" :disabled="design.elements.length <= 1" @click="removeElement" />
-            </div>
-            <p v-else class="empty-selection">Select an item to change its text, style or position. Use the buttons above to add something new.</p>
-            </div>
-          </div>
-          </div>
-        </fieldset>
-        <div v-if="design" class="editor-preview min-w-0">
 
-          <p v-if="previewError" role="alert" class="text-red-600 mb-3">{{ previewError }}</p>
-          <div class="canvas-toolbar"><CanvasToolbar :zoom="Math.round(previewZoom * 100)" :fitted="fitPreview" :disabled="busy" @zoom="setZoom($event / 100)" @fit="fitPreview = true"><select aria-label="Canvas paper size" :value="paperPresetValue" @change="setPaperSize(($event.target as HTMLSelectElement).value)"><option value="">Custom size</option><option v-for="size in paperSizes" :key="size.label" :value="'height' in size ? `${size.width}x${size.height}` : String(size.width)">{{ size.label }}</option></select><select v-if="design.kind === 'label'" v-model="labelPreviewMode" aria-label="Sample discount scenario" style="width: 150px"><option value="current">Sample data</option><option value="discount">With discount</option><option value="no-discount">Without discount</option></select><span role="status">{{ rendering ? 'Updating...' : 'Canvas' }}</span></CanvasToolbar></div>
-          <div class="selection-toolbar" aria-label="Selected section actions">
-            <template v-if="element"><strong>{{ elementName(element) }}</strong><button type="button" :disabled="busy || selectedIndex === 0" @click="move(selectedIndex, -1)" aria-label="Move selected item up">&uarr;</button><button type="button" :disabled="busy || selectedIndex === design.elements.length - 1" @click="move(selectedIndex, 1)" aria-label="Move selected item down">&darr;</button><button type="button" :disabled="busy || design.elements.length >= 40" @click="duplicateElement">Duplicate item</button><button type="button" :disabled="busy || design.elements.length <= 1" @click="removeElement">Delete item</button></template>
-            <template v-if="element"><button v-for="alignment in (['left', 'center', 'right'] as const)" :key="alignment" type="button" :disabled="busy" :aria-label="`Align box ${alignment}`" @click="alignBox(alignment)">{{ alignment }}</button></template>
-            <button type="button" :aria-pressed="showGuides" @click="showGuides = !showGuides">Guides</button>
-          </div>
-          <div ref="previewViewport" class="canvas-workbench" tabindex="0" aria-label="Design canvas. Plus and minus zoom; zero fits the view." @wheel="wheelZoom" @pointerdown="panCanvas">
-            <div ref="previewBox" class="preview-paper" :style="{ width: `${design.width * 4 * previewZoom}px`, aspectRatio: `${design.width} / ${canvasHeight}`, flexShrink: 0 }">
-              <img v-if="preview" :src="preview" alt="Sample of the designed print" class="preview-image" draggable="false" />
-              <button v-for="b in hitBounds" :key="b.id" type="button" :aria-label="`Select ${design.elements.find(e => e.id === b.id)?.type} element`" class="preview-hit-area" :class="{ 'preview-hit-selected': elementId === b.id, 'preview-hit-guide': showGuides }" :style="{ left: `${b.x / design.width * 100}%`, top: `${b.y / canvasHeight * 100}%`, width: `${b.width / design.width * 100}%`, height: `${b.height / canvasHeight * 100}%`, cursor: 'grab' }" @click="selectElement(b.id)" @pointerdown="startMove($event, b.id)" />
-              <div v-if="element && selectionBounds" class="resize-selection" :style="{ left: `${selectionBounds.x / design.width * 100}%`, top: `${selectionBounds.y / canvasHeight * 100}%`, width: `${selectionBounds.width / design.width * 100}%`, height: `${selectionBounds.height / canvasHeight * 100}%` }">
-                <button v-for="handle in resizeHandles" :key="handle" type="button" class="resize-handle" :data-handle="handle" :aria-label="`Resize ${resizeLabels[handle]}`" :title="'Drag to resize. Arrow keys adjust; Shift adjusts by 1 mm.'" :disabled="busy" :style="{ left: handle.includes('w') ? '0%' : handle.includes('e') ? '100%' : '50%', top: handle.includes('n') ? '0%' : handle.includes('s') ? '100%' : '50%', cursor: `${handle}-resize` }" @pointerdown="startMove($event, element.id, handle)" @keydown="resizeWithKeyboard($event, handle)" @click.stop />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-      </PrinterDesignerWorkspace>
-      </div>
     </template>
   </section>
 </template>
@@ -897,3 +336,7 @@ function historyShortcut(event: KeyboardEvent) {
 @media (max-width: 760px) { .editor-layout { grid-template-columns: 1fr; } .designer-workspace { height: auto; } .designer-workspace .editor-layout { flex: none; } .controls-scroll { overflow: visible; } .designer-workspace .editor-preview { order: -1; height: 75dvh; } .canvas-workbench { min-height: 200px; padding: 20px; } .element-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 
+
+<style scoped>
+.print-page-state{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;background:#f8fafc}.print-page-state button{padding:8px 14px;border:1px solid #ddd;border-radius:5px;background:white;margin:4px}
+</style>

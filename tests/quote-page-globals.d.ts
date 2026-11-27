@@ -12,6 +12,7 @@ declare global {
   const useRoute: typeof import('vue-router')['useRoute']
   function navigateTo(to: any, options?: { replace?: boolean; redirectCode?: number }): Promise<any>
   function useToast(): { add(message: Record<string, any>): void }
+  function useState<T>(key: string, init: () => T): Ref<T>
   function useNuxtApp(): { $auth: { session: Ref<Record<string, any> | null> } }
   function useCompanyScope(mode?: 'form' | 'table', pageForm?: boolean): {
     ready: Promise<void>; companyId: Ref<string>; readIds: Ref<string[]>; enabled: Ref<boolean>; auth: { session: Ref<Record<string, any> | null> }

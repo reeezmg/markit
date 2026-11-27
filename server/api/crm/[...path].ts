@@ -12,6 +12,7 @@ export default defineEventHandler(async event=>{
   const actor=await crmActor(event),query=getQuery(event)
   const path=getRequestURL(event).pathname.replace(/^\/api\/crm\/?/,'').split('/').filter(Boolean).map(decodeURIComponent)
   const [resource,id,action]=path
+  if(resource==='accounts')throw crmError('Business accounts have been removed from CRM.',410)
   if(resource==='campaigns')return crmCampaigns(event,actor,path)
   const write=event.method!=='GET',body=write?await readBody(event):query
   if(!body||typeof body!=='object'||Array.isArray(body))throw crmError('Enter valid CRM details.')
@@ -48,7 +49,7 @@ export default defineEventHandler(async event=>{
       }
       else if(crmKinds.includes(kind)&&id==='export'&&event.method==='GET'){
         const list=await crmList(db,actor,kind,query,true)
-        const columns:[string,string][]=kind==='clients'?[['clientId','Client ID'],['name','Name'],['phone','Phone'],['email','Email'],['lifecycle','Type'],['leadStatus','Lead status'],['source','Source'],['ownerName','Owner'],['score','Score'],['tags','Tags']]:kind==='deals'?[['name','Deal'],['clientName','Contact'],['pipelineKey','Pipeline'],['stageKey','Stage'],['status','Outcome'],['value','Value'],['probability','Probability'],['expectedClose','Expected close'],['ownerName','Owner']]:kind==='accounts'?[['name','Account'],['industry','Industry'],['phone','Phone'],['email','Email'],['website','Website'],['ownerName','Owner']]:[['subject','Subject'],['kind','Type'],['status','Status'],['priority','Priority'],['dueAt','Due'],['ownerName','Owner'],['clientName','Contact'],['segmentName','Segment']]
+        const columns:[string,string][]=kind==='clients'?[['clientId','Client ID'],['name','Name'],['phone','Phone'],['email','Email'],['lifecycle','Type'],['leadStatus','Lead status'],['source','Source'],['ownerName','Owner'],['score','Score'],['tags','Tags']]:kind==='deals'?[['name','Deal'],['clientName','Contact'],['pipelineKey','Pipeline'],['stageKey','Stage'],['status','Outcome'],['value','Value'],['probability','Probability'],['expectedClose','Expected close'],['ownerName','Owner']]:[['subject','Subject'],['kind','Type'],['status','Status'],['priority','Priority'],['dueAt','Due'],['ownerName','Owner'],['clientName','Contact'],['segmentName','Segment']]
         if(kind==='clients'){const {settings}=await readCrmSettings(db,actor.companyId);for(const field of settings.customFields){const key='custom:'+field.label;columns.push([key,key]);for(const row of list.rows)row[key]=row.customFields?.[field.key]??''}}
         setHeader(event,'Content-Type','text/csv; charset=utf-8');setHeader(event,'Content-Disposition',`attachment; filename="crm-${kind}.csv"`)
         setHeader(event,'X-CRM-Export-Truncated',String(list.truncated));result=crmCsv(list.rows,columns)

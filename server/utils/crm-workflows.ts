@@ -15,6 +15,12 @@ export async function crmClientChoices(db:CrmDb,actor:CrmActor,q:string){
 }
 // Import enriches explicitly identified existing memberships only. New identities
 // are created/linked by BillingAddClient on /client, the single contact page.
+// Decode only a cell that exactly matches the protected export of its saved value.
+// A literal apostrophe or a changed value is preserved and validated normally.
+function crmImportedCell(value:any,previous:any){
+  const exported=previous==null?'':Array.isArray(previous)?previous.join('; '):String(previous)
+  return value==="'"+exported&&/^\s*[=+\-@]/.test(exported)?previous:value
+}
 export async function crmImport(db:CrmDb,actor:CrmActor,body:any){
   if(!Array.isArray(body.records)||!body.records.length||body.records.length>200)throw crmError('Import between 1 and 200 client CRM updates.')
   const {settings}=await readCrmSettings(db,actor.companyId),staff=await crmStaffList(db,actor.companyId),records:any[]=[],errors:any[]=[],seen=new Set<string>()
@@ -26,22 +32,29 @@ export async function crmImport(db:CrmDb,actor:CrmActor,body:any){
     if(old.archived||(!crmCanEdit(actor,old)&&(old.owner_id||old.created_by)))throw crmError('You cannot update this client CRM record.',403)
     const owner=r.ownerId||old.owner_id||(staff.some((m:any)=>m.id===actor.userId)?actor.userId:actor.manager?staff[0]?.id:actor.userId)
     if(!staff.some((m:any)=>m.id===owner)||!actor.manager&&owner!==actor.userId&&owner!==old.owner_id)throw crmError('Choose an eligible company owner.')
+    r.source=crmImportedCell(r.source,old.source);r.tags=crmImportedCell(r.tags,old.tags)
     const customFields={...old.custom_fields,...r.customFields}
     for(const field of settings.customFields){const value=r['custom:'+field.label]??r['custom:'+field.key];if(value===undefined)continue
       customFields[field.key]=field.type==='BOOLEAN'?(/^(true|yes|1)$/i.test(String(value))?true:/^(false|no|0)$/i.test(String(value))?false:value):value}
     const input={...crmRow(old),...r,clientId:id,ownerId:owner,version:old.version,customFields,tags:r.tags===undefined?old.tags:Array.isArray(r.tags)?r.tags:String(r.tags).split(';').filter(Boolean),source:r.source||old.source||settings.sources[0]}
-    for(const key of ['name','phone','email'])if(r[key]!==undefined&&String(r[key]||'')!==String(old[key]||''))throw crmError('Contact details differ. Edit them on the existing client page.')
+    for(const key of ['name','phone','email']){
+      const canonical=String(old[key]||''),incoming=String(crmImportedCell(r[key],old[key])||'')
+      // Accept only the exact formula-safe export of this existing identity.
+      // Never strip arbitrary apostrophes or permit identity edits through CSV.
+      if(r[key]!==undefined&&incoming!==canonical)throw crmError('Contact details differ. Edit them on the existing client page.')
+      input[key]=old[key]??''
+    }
     input.customFields={...old.custom_fields,...r.customFields}
     for(const field of settings.customFields){
       const key=['custom:'+field.label,'custom:'+field.key].find(key=>Object.hasOwn(r,key))
       if(!key)continue
-      const value=r[key]
+      const value=crmImportedCell(r[key],old.custom_fields?.[field.key])
       if(field.type==='BOOLEAN'&&typeof value==='string'){
         if(!/^(true|false|yes|no|1|0)$/i.test(value.trim()))throw crmError('Choose true or false for '+field.label+'.')
         input.customFields[field.key]=/^(true|yes|1)$/i.test(value.trim())
       }else input.customFields[field.key]=value
     }
-    const normalized=crmInput(()=>normalizeCrmRecord('clients',input,settings));records.push({...normalized,clientId:id,version:old.version})
+    const normalized=crmInput(()=>normalizeCrmRecord('clients',input,settings));records.push({...normalized,name:old.name,email:old.email||'',phone:old.phone||'',clientId:id,version:old.version})
   }catch(error:any){errors.push({row:i+2,message:error.statusMessage||error.message})}
   if(body.preview)return {valid:records.length,total:body.records.length,errors}
   if(errors.length)throw crmError('Preview and correct every row before importing.',409)
@@ -89,17 +102,15 @@ export async function crmCommerce(db:CrmDb,company:string,clientId:string|null){
 export async function crmDetail(db:CrmDb,actor:CrmActor,kind:CrmKind,id:string){
   const record=await crmRead(db,actor,kind,id),company=actor.companyId
   const labels:any={ownerName:(await crmStaffList(db,company)).find((member:any)=>member.id===record.owner_id)?.name||'Former team member'}
-  if(record.account_id)labels.accountName=(await crmRead(db,actor,'accounts',record.account_id)).name
   if(record.client_id){const contact=await crmRead(db,actor,'clients',record.client_id);labels.clientName=contact.name;labels.linkedClientId=contact.client_id}
-  const relation=kind==='clients'?'client_id':kind==='accounts'?'account_id':kind==='deals'?'deal_id':null
+  const relation=kind==='clients'?'client_id':kind==='deals'?'deal_id':null
   const activities=relation?(await db.query(`SELECT * FROM crm_activities WHERE company_id=$1 AND ${relation}=$2 AND archived=false ORDER BY created_at DESC,id LIMIT 100`,[company,id])).rows:[]
   const audit=(await db.query(`SELECT a.*,cu.name AS actor_name FROM crm_audit a LEFT JOIN company_users cu ON cu.company_id=a.company_id AND cu.user_id=a.actor_id WHERE a.company_id=$1 AND a.entity_type=$2 AND a.entity_id=$3 ORDER BY a.created_at DESC,a.id LIMIT 100`,[company,kind,id])).rows
-  const deals=['clients','accounts'].includes(kind)?(await db.query(`SELECT *,expected_close::text FROM crm_deals WHERE company_id=$1 AND ${kind==='clients'?'client_id':'account_id'}=$2 AND archived=false ORDER BY created_at DESC LIMIT 100`,[company,id])).rows:[]
-  const clients=kind==='accounts'?(await db.query(`SELECT r.* FROM ${crmClientSource} r WHERE r.company_id=$1 AND r.account_id=$2 AND r.archived=false ORDER BY r.name LIMIT 100`,[company,id])).rows:[]
+  const deals=kind==='clients'?(await db.query(`SELECT *,expected_close::text FROM crm_deals WHERE company_id=$1 AND client_id=$2 AND archived=false ORDER BY created_at DESC LIMIT 100`,[company,id])).rows:[]
   const documents=kind==='deals'?(await db.query('SELECT * FROM crm_document_links WHERE company_id=$1 AND deal_id=$2 ORDER BY created_at DESC',[company,id])).rows:[]
   const commerce=await crmCommerce(db,company,kind==='clients'?record.client_id:null)
   const {settings}=await readCrmSettings(db,company)
-  return {record:{...crmRow(record),...labels,...(kind==='clients'?{score:crmScore(record,settings)}:{})},activities:activities.map(crmRow),audit:audit.map(crmRow),deals:deals.map(crmRow),clients:clients.map(crmRow),documents:documents.map(crmRow),commerce}
+  return {record:{...crmRow(record),...labels,...(kind==='clients'?{score:crmScore(record,settings)}:{})},activities:activities.map(crmRow),audit:audit.map(crmRow),deals:deals.map(crmRow),documents:documents.map(crmRow),commerce}
 }
 export async function crmSummary(db:CrmDb,actor:CrmActor){
   const company=actor.companyId

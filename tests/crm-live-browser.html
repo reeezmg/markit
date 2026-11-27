@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><title>CRM workflow browser verification</title></head><body><div id="app"></div><pre id="result">Running…</pre>
+<script type="module">
+import * as Vue from 'vue'
+import Workspace from '../components/CRM/Workspace.vue'
+import ClientPanel from '../components/CRM/ClientPanel.vue'
+import TaskComposer from '../components/CRM/TaskComposer.vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import UTable from '../node_modules/@nuxt/ui/dist/runtime/components/data/Table.vue'
+import UInput from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Input.vue'
+import USelect from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Select.vue'
+import USelectMenu from '../node_modules/@nuxt/ui/dist/runtime/components/forms/SelectMenu.vue'
+import UDropdown from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Dropdown.vue'
+import UPagination from '../node_modules/@nuxt/ui/dist/runtime/components/navigation/Pagination.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import heroicons from '../node_modules/@iconify-json/heroicons/icons.json'
+import { defaultCrmSettings } from '../utils/crm'
+const {ref,h,createApp,nextTick}=Vue
+// Preserve the browser's native Text/Comment constructors used by Headless UI.
+const context=await (await fetch('/qa/context')).json(),browserPrefix=context.prefix+(innerWidth<600?' Mobile':' Desktop'),section=ref('overview'),recordId=ref(''),scope={companyId:ref(context.companyId),busy:ref(false),ready:Promise.resolve(),auth:{session:ref({role:'admin'})}}
+window.testRoute={path:'/crm',query:{entryCompany:context.companyId}};window.useRoute=()=>window.testRoute;window.useCompanyScope=()=>scope;scope.selectCompany=async id=>{if(id!==context.companyId)throw Error('Wrong company')}
+window.$fetch=async(url,options={})=>{
+ const query=options.query?'?'+new URLSearchParams(options.query):'',method=options.method||'GET';const response=await fetch(url+query,{method,headers:{'Content-Type':'application/json','x-company-id':context.companyId,...options.headers},...(options.body?{body:JSON.stringify(options.body)}:{})});const data=await response.json();if(!response.ok)throw Object.assign(new Error(data.statusMessage),{data});return data
+}
+scope.fetch=window.$fetch
+const app=createApp({setup:()=>()=>section.value==='clients'&&recordId.value?h(ClientPanel,{key:section.value+recordId.value,clientId:recordId.value,companyId:context.companyId}):h(Workspace,{key:section.value+recordId.value,section:section.value,recordId:recordId.value||undefined})})
+app.config.globalProperties.$route=window.testRoute
+app.config.errorHandler=error=>{document.querySelector('#result').textContent='FAILED: '+error.stack}
+for(const [name,component]of Object.entries({UButton,UCard,UModal,UTable,UInput,USelect,USelectMenu,UDropdown,UPagination,UBadge}))app.component(name,component)
+app.component('UDashboardPanelContent',{setup:(_,{slots})=>()=>h('main',{class:'p-4 sm:p-6'},slots.default?.())})
+app.component('CompanyFormField',{setup:()=>()=>null})
+app.component('Icon',{props:['name'],setup:p=>()=>{const icon=heroicons.icons[p.name.replace(/^i-heroicons-/,'')]||heroicons.icons['link'];return h('svg',{viewBox:'0 0 24 24',width:'1em',height:'1em',innerHTML:icon.body})}})
+app.component('UIcon',{props:['name'],setup:p=>()=>h(Vue.resolveComponent('Icon'),{name:p.name})})
+app.component('NuxtLink',{props:{to:{},custom:Boolean,target:{}},setup:(p,{slots})=>()=>p.custom?slots.default?.({href:typeof p.to==='string'?p.to:p.to?.path+(p.to?.query?'?'+new URLSearchParams(p.to.query):''),route:window.testRoute,isActive:false,isExactActive:false,isExternal:true,navigate(){}}):h('a',{href:typeof p.to==='string'?p.to:p.to?.path+(p.to?.query?'?'+new URLSearchParams(p.to.query):'')},slots.default?.())})
+app.mount('#app')
+const sleep=ms=>new Promise(r=>setTimeout(r,ms)),assert=(value,message)=>{if(!value)throw Error(message)}
+async function wait(condition,message){let retries=0;for(let i=0;i<3000;i++){await nextTick();if(condition())return;const alert=document.querySelector('[role=alert]');if(!document.querySelector('[role=dialog]')&&alert&&/connection|timeout|timed out/i.test(alert.textContent)&&retries<3){const refresh=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Refresh');if(refresh&&!refresh.disabled){refresh.click();retries++;window.crmLiveRecoveries=(window.crmLiveRecoveries||0)+1}}await sleep(20)}throw Error(message)}
+const ui=()=>document.querySelector('#app').textContent+(document.querySelector('#test-toasts')?.textContent||'')
+const activeRoot=()=>document.querySelector('[role="dialog"]')||document
+const button=text=>[...activeRoot().querySelectorAll('button')].find(b=>b.textContent.trim()===text)
+async function click(text){await wait(()=>button(text)&&!button(text).disabled,'Button unavailable: '+text);button(text).click();await sleep(80);await nextTick()}
+function input(label){return [...activeRoot().querySelectorAll('label')].find(el=>el.textContent.trim().startsWith(label))?.querySelector('input,select,textarea')}
+function set(el,value){assert(el,'Input missing');el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));if(el.tagName==='SELECT')el.dispatchEvent(new Event('change',{bubbles:true}))}
+async function go(next,id=''){section.value=next;recordId.value=id;await nextTick();await wait(()=>!ui().includes('Loading your CRM'),'CRM section did not load');await sleep(100)}
+async function saved(){await wait(()=>!document.querySelector('[role="dialog"]'),'Editor did not close after save')}
+try{
+ await wait(()=>ui().includes('Open deal value'),'Live CRM overview loads');assert([...document.querySelectorAll('a')].some(a=>a.textContent.includes('Add / manage clients')&&a.getAttribute('href').startsWith('/client?')),'Overview enquiry creation opens the shared client page');
+ await go('clients',context.records.clients[0].id);await wait(()=>ui().includes('Related deals'),'Live client detail loads');assert(ui().includes(context.prefix),'Client CRM shows persisted QA records');await click('Add task');set(input('Subject'),browserPrefix+' client task');await click('Save activity');await saved();assert((await scope.fetch('/api/crm/activities',{query:{q:browserPrefix+' client task'}})).rows.some(r=>r.clientId===context.records.clients[0].id),'Client task persists with canonical client');
+ await go('deals');await wait(()=>ui().includes('New deal'),'Deals board loads');await click('New deal');set(input('Deal name'),browserPrefix+' deal');set(input('Pipeline'),context.pipelineKey||'qa_'+context.batch.replaceAll('-','').slice(0,12));set(input('Deal value'),'3500');await wait(()=>[...input('Client').options].some(o=>o.value===context.records.clients[0].id),'Client choices load');set(input('Client'),context.records.clients[0].id);await click('Save record');await saved();const browserDeal=(await scope.fetch('/api/crm/deals',{query:{q:browserPrefix+' deal'}})).rows.find(r=>Number(r.value)===3500);assert(browserDeal,'Browser deal persists with entered value');await go('deals',browserDeal.id);await wait(()=>ui().includes('Edit record'),'Deal detail loads');await click('Add task');assert(input('Deal').value===browserDeal.id&&input('Client').value===context.records.clients[0].id,'Deal task prefills deal and client');set(input('Subject'),browserPrefix+' deal task');await click('Save activity');await saved();
+ await go('activities');await wait(()=>ui().includes('New activity'),'Activity list loads');await click('New activity');set(input('Subject'),browserPrefix+' segment task');set(input('Segment'),'qa_'+context.batch.replaceAll('-','').slice(0,12));await click('Save activity');await saved();
+ set(input('Search'),browserPrefix+' deal task');await click('Apply filters');await wait(()=>document.querySelectorAll('tbody tr').length>0&&[...document.querySelectorAll('tbody tr')].every(row=>row.textContent.includes(browserPrefix+' deal task')),'Task filter loads');await click('Complete');await wait(()=>ui().includes('Activity completed.'),'Task completes from list');assert((await scope.fetch('/api/crm/activities',{query:{q:browserPrefix+' deal task'}})).rows.some(r=>r.status==='DONE'),'Completed status persists');
+ await go('segments');await wait(()=>document.querySelector('[aria-label="Saved segment"]'),'Segments load');set(document.querySelector('[aria-label="Saved segment"]'),'qa_'+context.batch.replaceAll('-','').slice(0,12));await sleep(500);await click('Add task for segment');assert(input('Segment').value==='qa_'+context.batch.replaceAll('-','').slice(0,12),'Segment context is prefilled');set(input('Subject'),browserPrefix+' contextual segment task');await click('Save activity');await saved();assert((await scope.fetch('/api/crm/activities',{query:{q:browserPrefix+' contextual segment task'}})).rows.some(r=>r.segmentKey==='qa_'+context.batch.replaceAll('-','').slice(0,12)),'Segment task persists with selected group');
+ await go('calendar');await wait(()=>document.querySelector('[aria-label="Next month"]'),'Calendar loads');await wait(()=>ui().includes(context.prefix),'Calendar displays retained QA events');
+ await go('funnel');await wait(()=>ui().includes('Deals by current stage'),'Funnel loads from live reports');set(input('Pipeline'),'qa_'+context.batch.replaceAll('-','').slice(0,12));await nextTick();for(const [label,min] of [['Won deals',2],['Lost deals',3]]){const card=[...document.querySelectorAll('p')].find(p=>p.textContent===label)?.parentElement;assert(Number(card?.querySelectorAll('p')[1]?.textContent)>=min,'Live funnel '+label+' matches retained outcomes')}
+ await go('reports');await wait(()=>ui().includes('Team performance'),'Live reports load');
+ await go('settings');await wait(()=>ui().includes('Sales / ERP'),'Live rules and settings load');assert(!document.querySelector('[role="alert"]'),'No UI request errors');
+ document.querySelector('#result').textContent='ALL PASSED: live Blue Nest client task, deal creation, standalone/segment tasks, segment prefill, calendar, funnel, reports and settings; read recoveries: '+(window.crmLiveRecoveries||0)
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nUI: '+ui()}
+</script></body></html>

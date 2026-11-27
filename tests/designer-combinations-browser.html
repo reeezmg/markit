@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Designer combination checks</title></head><body><pre id="result">RUNNING</pre><script type="module">
+import { newElement, templateSchema, defaultTableColumns, defaultTaxTableColumns, twoLineTableColumns } from '../utils/print-templates'
+import { renderPrintTemplate, templatePrintBytes } from '../utils/print-template-renderer.client'
+import { designerFonts } from '../utils/designer-presentation'
+import { receiptPhotoFixture } from './receipt-photo-fixture'
+const failures=[], passed=[], check=(ok,message)=>{if(!ok)throw Error(message)}, clone=value=>JSON.parse(JSON.stringify(value))
+const base={id:'matrix',name:'Combination test',kind:'receipt',width:100,height:130,dpi:'203',fontFamily:'sans',elements:[]}
+async function run(name,action){try{await action();passed.push(name)}catch(error){failures.push({name,error:error.stack})}document.querySelector('#result').textContent=`RUNNING ${passed.length+failures.length} cases; ${failures.length} failures`}
+// Deterministic greedy covering array: cover every pair of factor values, not just random samples.
+const factors=[['label','receipt'],['203','300'],designerFonts,[8,11,14],[400,500,700],['auto-width','auto-height','fixed'],['left','center','right'],['top','middle','bottom'],[false,true],[0,1],[0,1],[0,15,-15],[false,true],[0,.5,1]]
+let seed=9451;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
+const pairKeys=row=>row.flatMap((value,i)=>row.slice(i+1).map((other,k)=>`${i}:${value}|${i+k+1}:${other}`)), uncovered=new Set()
+for(let i=0;i<factors.length;i++)for(let j=i+1;j<factors.length;j++)for(let a=0;a<factors[i].length;a++)for(let b=0;b<factors[j].length;b++)uncovered.add(`${i}:${a}|${j}:${b}`)
+const allPairs=uncovered.size, candidates=Array.from({length:2500},()=>factors.map(values=>Math.floor(random()*values.length))), rows=[]
+while(uncovered.size){let best,score=0;for(const row of candidates){const count=pairKeys(row).filter(key=>uncovered.has(key)).length;if(count>score){best=row;score=count}}check(best,'Covering array left uncovered pairs');rows.push(best);pairKeys(best).forEach(key=>uncovered.delete(key))}
+for(const [index,row] of rows.entries())await run(`text-pairwise-${index}`,async()=>{
+  const [kind,dpi,fontFamily,fontSize,fontWeight,resizeMode,align,textVerticalAlign,italic,padding,margin,rotation,flipX,fillOpacity]=row.map((v,i)=>factors[i][v])
+  const parent={...newElement('frame',100),id:'parent',x:10,y:10,width:80,height:80,padding:1,margin:0}
+  const text={...newElement('field',100),id:'text',parentId:'parent',x:10,y:10,width:45,height:18,field:'grandTotal',text:'Value: ',suffix:'!',fontFamily,fontSize,fontWeight,resizeMode,align,textVerticalAlign,italic,padding,margin,rotation,flipX,fillOpacity,background:'#eef2ff',backgroundOpacity:.7,borderColor:'#0d99ff',borderWidth:.2,cornerRadii:{topLeft:0,topRight:1,bottomRight:2,bottomLeft:3},letterSpacing:10,letterSpacingUnit:'percent'}
+  const template={...base,kind,dpi,elements:[parent,text]}, saved=templateSchema.parse(clone(template)), data={...receiptPhotoFixture,grandTotal:0}
+  const design=await renderPrintTemplate(template,data,{mode:'design'}), reopened=await renderPrintTemplate(saved,data,{mode:'design'}), printed=await renderPrintTemplate(saved,data)
+  check(design.canvas.toDataURL()===reopened.canvas.toDataURL(),'Save/reopen changed paint or text')
+  check(JSON.stringify(design.bounds)===JSON.stringify(printed.bounds),'Print changed layout')
+  check(templatePrintBytes(design,template).join()===templatePrintBytes(printed,saved).join(),'Print image conversion changed packed bytes')
+  check(design.bounds.some(b=>b.id==='text'&&b.width>0&&b.height>0),'Zero-valued linked text disappeared')
+})
+for(const type of ['items','taxsummary'])for(const layout of [1,2])for(const count of [0,1,8])for(const dpi of ['203','300'])await run(`table-${type}-lines${layout}-rows${count}-${dpi}`,async()=>{
+  const table={...newElement(type,100),id:'table',height:2,fontSize:8,tableBorders:count%2===1,tableRules:true,tableTotals:true,tableStyle:{rowHeight:7,headerHeight:8,cellPadding:.5,fontSize:8,headerFontSize:9,verticalAlign:'middle',borderWidth:.3},marginSides:{top:1,right:0,bottom:2,left:0}}
+  if(type==='items')table.columns=layout===1?defaultTableColumns():twoLineTableColumns()
+  else table.taxColumns=defaultTaxTableColumns().map((c,i)=>({...c,line:layout===2&&i>1?2:1}))
+  const footer={...newElement('text',100),id:'footer',text:'After table',height:8}, template={...base,dpi,elements:[table,footer]}, data={...receiptPhotoFixture,entries:Array.from({length:count},(_,i)=>({...receiptPhotoFixture.entries[i%2],description:'Long item description that must wrap correctly in narrow cells'}))}
+  const rendered=await renderPrintTemplate(templateSchema.parse(clone(template)),data), t=rendered.bounds.find(b=>b.id==='table'), f=rendered.bounds.find(b=>b.id==='footer')
+  check(t&&f&&f.y>=t.y+t.height+1.99,'Footer overlaps a growing table')
+  check(templatePrintBytes(rendered,template).length>20,'Table combination lost printer data')
+})
+for(const rotation of [15,30,90,-30])await run(`receipt-rotated-frame-${rotation}`,async()=>{
+  const frame={...newElement('frame',100),id:'rotated',x:28,y:25,width:44,height:56,rotation,borderWidth:.5,borderColor:'#000000',marginSides:{top:23,right:0,bottom:0,left:0}}, template={...base,elements:[frame]}, rendered=await renderPrintTemplate(template,receiptPhotoFixture), box=rendered.bounds[0], angle=rotation*Math.PI/180
+  const expectedBottom=box.y+box.height/2+Math.abs(Math.sin(angle))*box.width/2+Math.abs(Math.cos(angle))*box.height/2
+  check(rendered.height>=expectedBottom-.1,`Rotated frame clipped: paper ${rendered.height}, visible bottom ${expectedBottom}`)
+})
+document.querySelector('#result').textContent=(failures.length?'FAILED':'ALL PASSED')+': '+JSON.stringify({cases:passed.length+failures.length,pairwiseCases:rows.length,pairsCovered:allPairs,passed:passed.length,failures},null,2)
+</script></body></html>

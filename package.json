@@ -5,6 +5,7 @@
     "version": "0.0.1-prealpha.1",
     "scripts": {
         "test:document-designer": "tsx --test tests/document-designer.test.ts",
+        "test:designer-audit": "node tests/run-designer-audit.mjs",
         "test:connect-whatsapp": "vue-tsc -p tests/tsconfig.connect-whatsapp.json && tsx --test --test-concurrency=1 tests/connect-whatsapp.test.ts && node tests/run-connect-whatsapp-browser.mjs",
         "dev": "nuxt dev",
         "dev:web": "nuxt dev --port 3000",
@@ -17,7 +18,7 @@
         "typecheck": "nuxt typecheck",
         "typecheck:large": "node scripts/typecheck-large.mjs",
         "test:print-templates": "vue-tsc -p tests/tsconfig.print-templates.json && tsx tests/print-templates.test.ts && tsx --test tests/receipt-pdf-sharing.test.ts tests/receipt-data.test.ts tests/print-label-routing.test.ts tests/bluetooth-printing.test.ts",
-        "test:print-template-browser": "node tests/run-print-template-browser.mjs && node tests/run-print-template-browser.mjs sheet-image-browser.html && node tests/run-print-template-browser.mjs receipt-audit-browser.html",
+        "test:print-template-browser": "node tests/run-print-template-browser.mjs && node tests/run-print-template-browser.mjs sheet-image-browser.html && node tests/run-print-template-browser.mjs receipt-audit-browser.html && node tests/run-print-template-browser.mjs printer-designer-browser.html",
         "test": "tsx tests/payroll-attendance-shift.test.ts && tsx --test tests/shift-policy.test.ts tests/holiday-settings.test.ts tests/attendance-calendar-request.test.ts tests/salary-safety.test.ts",
         "test:user-credit": "tsx --test tests/user-credit-input.test.ts",
         "test:billing": "node tests/billing/run.mjs",

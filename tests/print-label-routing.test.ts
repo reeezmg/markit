@@ -114,9 +114,13 @@ test('company defaults are loaded for receipt and label printing', async () => {
   const f = usbFixture(); await f.receipt(); await f.label();
   assert.deepEqual(f.calls, ['load-receipt', 'render', 'escpos', 'write', 'load-label', 'render', 'tspl', 'write']);
 });
-test('legacy fallback is restricted to preparing receipt and TSPL jobs', async () => {
-  const f = usbFixture({ renderFails: true }); await f.receipt(); await f.label();
-  assert.ok(f.calls.includes('legacy-receipt')); assert.ok(f.calls.includes('legacy-label'));
+test('selected label designs never fall back to a different layout when rendering fails', async () => {
+  const f = usbFixture({ renderFails: true }); await f.receipt();
+  assert.ok(f.calls.includes('legacy-receipt')); f.calls.length = 0;
+  await assert.rejects(f.label(), /Invalid design/);
+  assert.equal(f.calls.includes('legacy-label'), false); assert.equal(f.calls.includes('write'), false);
+  const legacy = usbFixture({ noDesign: true }); await legacy.label();
+  assert.ok(legacy.calls.includes('legacy-label')); assert.ok(legacy.calls.includes('write'));
   for (const options of [{ writeFails: true }, { loadFails: true }]) {
     const g = usbFixture(options); await assert.rejects(g.receipt()); await assert.rejects(g.label());
     assert.equal(g.calls.some(c => c.startsWith('legacy-')), false);

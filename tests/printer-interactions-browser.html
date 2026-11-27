@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Printer editor interaction matrix</title>
+<style>*{box-sizing:border-box}body{margin:0;font:14px Arial}button,input,select,textarea{font:inherit}button{border:0;background:transparent;cursor:pointer}h1,h2,h3,p{margin:0}#result{position:fixed;bottom:0;left:0;z-index:30000;background:white;font:10px monospace;max-height:25vh;overflow:auto}</style>
+</head><body><div id="app"></div><pre id="result">RUNNING</pre><script type="module">
+import * as Vue from 'vue'
+import PrintEditor from '../components/DocumentDesigner/PrintEditor.vue'
+import { newElement, printSettingsSchema } from '../utils/print-templates'
+import { printLayerTree, printElementId } from '../utils/print-designer'
+import { flattenQuoteLayers } from '../utils/quote-layers'
+import { useDesignerHistory } from '../utils/designer-history'
+import { printDesignerSamples } from '../utils/print-designer-samples'
+import { renderPrintTemplate, templatePrintBytes } from '../utils/print-template-renderer.client'
+Object.assign(globalThis,Vue,{useCompanyScope:()=>({auth:{session:Vue.ref({companyId:'fixture',role:'admin'})},fetch:async()=>[]})})
+const clone=value=>JSON.parse(JSON.stringify(value)), settings=Vue.ref({version:1,receiptId:null,labelId:null,templates:[]}), saved=Vue.ref(''), version=Vue.ref(0), history=useDesignerHistory(settings), samples=printDesignerSamples({companyName:'Matrix store'}), failures=[], passes=[]
+let phase='start', checks=0
+const check=(ok,message)=>{checks++;if(!ok)throw Error(message)}, pause=()=>new Promise(r=>setTimeout(r,60)), label=name=>document.querySelector(`[aria-label="${name}"]`), button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text), design=()=>settings.value.templates[0]
+const wait=async predicate=>{for(let n=0;n<80;n++){await pause();if(predicate())return}throw Error('Timed out '+phase+': '+[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent).join(';'))}
+const ready=()=>document.querySelector('.print-bitmap')&&button('Save design')&&!button('Save design').disabled
+const app=Vue.createApp({render:()=>design()?Vue.h(PrintEditor,{key:version.value,settings:settings.value,selectedId:design().id,saved:saved.value,busy:false,canSave:true,sampleLabel:samples.label,sampleReceipt:samples.receipt,variables:[],onGesture:active=>active?history.begin():history.end(),onHistory:direction=>history[direction](),onSave:()=>{settings.value=printSettingsSchema.parse(settings.value);saved.value=JSON.stringify(settings.value);history.reset()}}):null});app.mount('#app')
+const node=id=>flattenQuoteLayers(printLayerTree(design())).find(n=>printElementId(n.id)===id)
+const select=async(id,shift=false)=>{const n=node(id);check(n,'Missing node '+id);label('Select '+(n.parentId?'layer ':'quote section ')+n.id).dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:shift}));await pause()}
+const hit=id=>document.querySelector(`[data-layer-id="${node(id).id}"]`), scale=()=>document.querySelector('.print-paper').getBoundingClientRect().width/design().width
+const position=id=>{const r=hit(id).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}}
+const edit=(name,value)=>{const el=label(name);check(el,'Missing '+name);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}))}
+const shortcut=async(key,shift=false)=>{document.body.dispatchEvent(new KeyboardEvent('keydown',{key,ctrlKey:true,shiftKey:shift,bubbles:true,cancelable:true}));await pause()}
+function drag(id,dx,dy){const target=hit(id),root=document.querySelector('.quote-editing-canvas'),r=target.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;root.setPointerCapture=()=>{};root.hasPointerCapture=()=>false;target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:73,button:0,clientX:x,clientY:y,ctrlKey:true}));root.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:73,clientX:x+dx,clientY:y+dy,altKey:true}));root.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:73}))}
+const modes=[{}, {rotation:30}, {flipX:true}, {rotation:90,flipY:true}]
+for(const kind of ['label','receipt'])for(const padding of [0,1])for(const [modeIndex,mode] of modes.entries()){
+  phase=`${kind}/padding-${padding}/transform-${modeIndex}`
+  try{
+    const parent={...newElement('frame',100),id:'parent',x:28,y:25,width:44,height:56,padding,...mode,...(kind==='receipt'?{marginSides:{top:23,right:0,bottom:0,left:0}}:{})}
+    const text={...newElement('field',100),id:'caption',parentId:parent.id,x:3,y:4,width:30,height:8,fontSize:8,field:kind==='label'?'shopname':'companyName',text:'Pay ',suffix:'!',resizeMode:'auto-height',margin:.5}
+    const qr={...newElement('qrcode',100),id:'qr',parentId:parent.id,x:4,y:20,width:20,height:20,field:kind==='label'?'barcode':'invoiceNumber',margin:.5}
+    settings.value={version:1,receiptId:null,labelId:null,templates:[{id:`case-${version.value}`,name:phase,kind,width:100,height:130,dpi:modeIndex%2?'300':'203',fontFamily:modeIndex%2?'thermal':'sans',elements:[parent,text,qr]}]};saved.value=JSON.stringify(settings.value);history.reset();version.value++;await wait(ready)
+    const before=position(qr.id);await select(text.id);await select(qr.id,true);label('Group selection').click();await wait(ready)
+    const group=design().elements.find(e=>e.type==='frame'&&e.parentId===parent.id),groupId=group?.id;check(group,'Grouping failed');check(Math.hypot(position(qr.id).x-before.x,position(qr.id).y-before.y)<.8,'Grouping shifted existing content: '+JSON.stringify({before,after:position(qr.id),group,children:design().elements.filter(e=>e.parentId===group.id),parent:design().elements.find(e=>e.id===parent.id)}))
+    phase+=' / drag';const children=()=>JSON.stringify(design().elements.filter(e=>e.parentId===groupId)), snapshot=children(), start=position(qr.id), mm=scale();drag(groupId,mm,mm);await wait(ready)
+    check(children()===snapshot,'Dragging modified group children');check(Math.abs(position(qr.id).x-start.x-mm)<1&&Math.abs(position(qr.id).y-start.y-mm)<1,'Dragging inside transformed parent moved in the wrong direction')
+    phase+=' / drag undo';await shortcut('z');await wait(ready);check(Math.hypot(position(qr.id).x-start.x,position(qr.id).y-start.y)<1,'Drag undo moved content');await shortcut('y');await wait(ready)
+    phase+=' / numeric move';edit('Element X',Number(label('Element X').value)+.5);edit('Element Y',Number(label('Element Y').value)+.5);await wait(ready);check(children()===snapshot,'Numeric group movement modified children')
+    phase+=' / resize';const resizeBefore=clone(design().elements),oldGroup=clone(design().elements.find(e=>e.id===groupId));edit('Element width',oldGroup.width+2);await wait(ready);check(design().elements.find(e=>e.id===groupId).width>oldGroup.width+1.8,'Numeric frame resize ignored dimensions');check(design().elements.find(e=>e.id===qr.id).width>20,'Frame resize did not scale descendants');await shortcut('z');await wait(ready);check(JSON.stringify(design().elements)===JSON.stringify(resizeBefore),'Frame resize undo did not restore descendants: '+JSON.stringify({before:resizeBefore,after:design().elements}));
+    phase+=' / duplicate';await shortcut('d');await wait(ready);check(design().elements.length===7,'Group duplicate did not copy its descendants');await shortcut('z');await wait(ready);check(design().elements.length===4,'Duplicate undo did not remove descendants')
+    phase+=' / paste';await select(groupId);await shortcut('c');await select(parent.id);await shortcut('v');await wait(ready);check(design().elements.length===7&&new Set(design().elements.map(e=>e.id)).size===7,'Paste lost children or reused IDs');await shortcut('z');await wait(ready)
+    phase+=' / ungroup';await select(groupId);const beforeUngroup=position(qr.id);await shortcut('g',true);await wait(ready);check(design().elements.length===3,'Ungroup did not remove its frame');check(Math.hypot(position(qr.id).x-beforeUngroup.x,position(qr.id).y-beforeUngroup.y)<1,'Ungroup shifted children inside their transformed/padded parent')
+    phase+=' / locks';await shortcut('z');await wait(ready);await select(parent.id);label('Lock selected layer').click();await pause();await select(qr.id);check(label('Element X').matches(':disabled'),'Parent lock did not protect child geometry');await select(parent.id);label('Unlock selected layer').click();await wait(ready)
+    phase+=' / save';button('Save design').click();await wait(()=>document.querySelector('.inspector-save-state').textContent==='All changes saved');const rendered=await renderPrintTemplate(clone(design()),kind==='label'?samples.label:samples.receipt,{mode:'design'});check(rendered.canvas.toDataURL()===document.querySelector('.print-bitmap').src,'Saving changed rendered pixels');check(templatePrintBytes(rendered,design()).length>20,'Print output missing after combined edits')
+    passes.push(phase)
+  }catch(error){failures.push({case:phase,error:error.stack});break}
+  document.querySelector('#result').textContent=`RUNNING ${passes.length+failures.length}/16; ${checks} assertions; ${failures.length} failures`
+}
+if(!failures.length){
+  phase='nesting boundaries';try{
+    const frames=Array.from({length:7},(_,i)=>({...newElement('frame',100),id:'depth-'+i,parentId:i?'depth-'+(i-1):undefined,x:i?0:10,y:i?0:10,width:80,height:100}));
+    const a={...newElement('text',100),id:'deep-a',parentId:'depth-6',x:2,y:2,width:20,height:8,text:'A'},b={...a,id:'deep-b',y:12,text:'B'},source={...newElement('frame',100),id:'source',x:5,y:5,width:20,height:20},inside={...newElement('text',100),id:'source-text',parentId:'source',x:1,y:1,width:12,height:8,text:'Copy'};
+    settings.value={version:1,receiptId:null,labelId:null,templates:[{id:'boundary',name:phase,kind:'label',width:100,height:130,dpi:'203',elements:[...frames,a,b,source,inside]}]};saved.value=JSON.stringify(settings.value);history.reset();version.value++;await wait(ready);const originalCount=design().elements.length;
+    await select(a.id);await select(b.id,true);label('Group selection').click();await pause();check(design().elements.length===originalCount&&document.body.textContent.includes('eight levels'),'Grouping exceeded the supported nesting depth');
+    await select(source.id);await shortcut('c');await select('depth-6');await shortcut('v');await pause();check(design().elements.length===originalCount,'Pasting exceeded the supported nesting depth');
+    const transfer=new DataTransfer();document.querySelector(`[data-layer-node="${node(source.id).id}"] > .layer-row`).dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer}));document.querySelector(`[data-layer-node="${node('depth-6').id}"] > .layer-row`).dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));await pause();check(!design().elements.find(e=>e.id===source.id).parentId,'Reparenting exceeded the supported nesting depth');
+    await select('depth-3');await shortcut('v');await wait(ready);check(design().elements.length===originalCount+2&&printSettingsSchema.safeParse(settings.value).success,'Valid nested paste was blocked');passes.push(phase);
+  }catch(error){failures.push({case:phase,error:error.stack})}
+}
+document.querySelector('#result').textContent=(failures.length?'FAILED':'ALL PASSED')+': '+JSON.stringify({cases:passes.length+failures.length,checks,passed:passes,failures},null,2)
+</script></body></html>

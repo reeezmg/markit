@@ -146,6 +146,9 @@ model WhatsAppInstallationAppointment {
 // records are baselined on activation/linking; state observations and decisions use
 // append-only CrmAudit entityType='sales-rule' with versioned rule/link identities.
 // The authorized CRM worker/check-now route owns updates, never source accounting.
+// CRM business accounts are retired: no account model, account foreign keys,
+// account scoring weight or account-based segment filters. Clients/deals/tasks
+// link directly to CompanyClient; historical audit evidence remains append-only.
 model CrmSettings {
     companyId String @id @map("company_id")
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -157,33 +160,6 @@ model CrmSettings {
     @@map("crm_settings")
 }
 
-model CrmAccount {
-    id String @id @default(uuid())
-    companyId String @map("company_id")
-    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    name String
-    industry String @default("")
-    website String @default("")
-    email String @default("")
-    phone String @default("")
-    address String @default("")
-    ownerId String @map("owner_id")
-    tags String[]
-    description String @default("")
-    archived Boolean @default(false)
-    version Int @default(1)
-    createdBy String @map("created_by")
-    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
-    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
-    clients CompanyClient[] @prisma.passthrough("@ignore")
-    deals CrmDeal[]
-    activities CrmActivity[]
-    @@unique([companyId, id])
-    @@index([companyId, archived, name])
-    @@deny('all', true)
-    @@map("crm_accounts")
-}
-
 // Pipeline/stage identifiers reference validated settings; removing a stage in use
 // is rejected. Won/lost requires a matching terminal stage; reopening clears closedAt.
 // Values use the owning company's currency. Optimistic versions reject stale edits.
@@ -193,8 +169,6 @@ model CrmDeal {
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     clientId String? @map("client_id")
     client CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
-    accountId String? @map("account_id")
-    account CrmAccount? @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
     name String
     pipelineKey String @map("pipeline_key")
     stageKey String @map("stage_key")
@@ -232,8 +206,6 @@ model CrmActivity {
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     clientId String? @map("client_id")
     client CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
-    accountId String? @map("account_id")
-    account CrmAccount? @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
     dealId String? @map("deal_id")
     deal CrmDeal? @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
     kind String @default("TASK")
@@ -438,7 +410,6 @@ model DistributorCompany {
 
 model Company extends Base {
     crmSettings CrmSettings?
-    crmAccounts CrmAccount[]
     crmDeals CrmDeal[]
     crmTasks CrmActivity[]
     crmDocuments CrmDocumentLink[]
@@ -3102,8 +3073,6 @@ model CompanyClient {
     // Client creation/edit/activation stays on the existing /client page.
     crmData Json @default("{}") @map("crm_data") @prisma.passthrough("@ignore")
     crmVersion Int @default(0) @map("crm_version") @prisma.passthrough("@ignore")
-    crmAccountId String? @map("crm_account_id") @prisma.passthrough("@ignore")
-    crmAccount CrmAccount? @relation(fields: [companyId, crmAccountId], references: [companyId, id], onDelete: Restrict) @prisma.passthrough("@ignore")
     crmDeals CrmDeal[]
     crmTasks CrmActivity[]
     expenses       Expense[]

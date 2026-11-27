@@ -12,7 +12,7 @@ try{
   const history=client?await crmCommerce(db,company,client.client_id):null
   // Virtual default columns validate the real client SELECT while the prepared
   // migration is pending. This is one read-only statement, not a view or schema.
-  const defaults=ready?'':`WITH company_clients AS (SELECT company_id,client_id,status,pipeline_status,'{}'::jsonb AS crm_data,0 AS crm_version,NULL::text AS crm_account_id FROM public.company_clients) `
+  const defaults=ready?'':`WITH company_clients AS (SELECT company_id,client_id,status,pipeline_status,'{}'::jsonb AS crm_data,0 AS crm_version FROM public.company_clients) `
   const projection=(await db.query(`${defaults}SELECT r.id,r.version,r.lifecycle FROM ${crmClientSource} r WHERE r.company_id=$1 ORDER BY r.id LIMIT 1`,[company])).rows
   const contactTable=await crmTableReady(db,'crm_contacts')
   console.log(JSON.stringify({company:exists.name,crmReady:ready,marketingReady:marketing,historyReadOnly:!!history,clientProjectionReadOnly:projection.length>0,separateContactTableExists:contactTable,historyQueries:['bills','quotes','orders','products','legacyActivities']}))

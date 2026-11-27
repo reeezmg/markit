@@ -10,6 +10,7 @@
     "../utils/print-template-renderer.client.ts", "../utils/load-print-template.client.ts",
     "../utils/thermal-receipt.client.ts", "../components/PrinterTemplateDesigner.vue",
     "../components/PrinterDesignerWorkspace.vue",
+    "../pages/print-design/**/*.vue", "../composables/usePrintDesignDraft.ts",
     "../pages/receipt/[id].vue", "../pages/settings/printer.vue",
     "../components/PrintTemplateReceipt.vue", "../composables/usePrintBill.ts",
     "../components/PrintTemplateLabels.vue", "../components/BarcodeComponent.vue",

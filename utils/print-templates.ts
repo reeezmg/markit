@@ -1,14 +1,17 @@
+import { designerPresentationFields, designerFonts, layerMargins } from './designer-presentation'
 import { labelBarcode } from './label-barcode';
 import { z } from 'zod';
 import { labelVariables, nestedLabelValue } from './label-variables';
 import { receiptSummary } from './receipt-summary';
 import { documentTableStyleSchema } from './document-table';
+import { barcodeFormats } from './print-codes';
+import { applyDesignerRules, priceComparisonRule, type DesignerRule } from './designer-rules';
 export const STANDARD_LABEL_ID = 'builtin:standard-product-label';
 export const NO_TAX_RECEIPT_ID = 'builtin:no-tax-receipt';
 export const CLASSIC_RECEIPT_ID = 'builtin:classic-tax-receipt';
 export const tableColumnSchema = z.object({
   id: z.string().min(1).max(80), header: z.string().max(200), field: z.string().min(1).max(100).refine(key =>
-    key === 'rowNumber' || /^entry\.(description|qty|mrp|value|discount|discountAmount|tax|tvalue|size|unit|barcode|hsn)$/.test(key) ||
+    key === 'rowNumber' || /^tax\.(rate|sgst|cgst|total)$/.test(key) || /^entry\.(description|qty|mrp|value|discount|discountAmount|tax|tvalue|size|unit|barcode|hsn)$/.test(key) ||
     labelVariables.some(v => v.key === key && /^(product|variant|item)\./.test(key)) ||
     /^(product|variant)\.customFields\.[a-zA-Z0-9_-]+$/.test(key), 'Choose a supported table variable'),
   width: z.number().min(1).max(100), align: z.enum(['left', 'center', 'right']),
@@ -26,11 +29,29 @@ export function defaultTableColumns(): TableColumn[] {
     { id: 'amount', header: 'Amount', field: 'entry.tvalue', width: 22, align: 'right' },
   ];
 }
+export function defaultTaxTableColumns(): TableColumn[] {
+  return [
+    { id: 'rate', header: 'TAX', field: 'tax.rate', width: 13, align: 'left', suffix: '%', totalLabel: 'TOTAL' },
+    { id: 'sgst', header: 'SGST', field: 'tax.sgst', width: 29, align: 'right', total: true },
+    { id: 'cgst', header: 'CGST', field: 'tax.cgst', width: 29, align: 'right', total: true },
+    { id: 'total', header: 'TOTAL', field: 'tax.total', width: 29, align: 'right', total: true },
+  ];
+}
 
 export const elementSchema = z.object({
+  ...designerPresentationFields,
   id: z.string().min(1).max(80),
-  type: z.enum(['text', 'field', 'items', 'line', 'barcode', 'qrcode', 'logo', 'taxsummary', 'spacer']),
+  type: z.enum(['text', 'field', 'items', 'line', 'barcode', 'qrcode', 'logo', 'taxsummary', 'spacer', 'frame', 'shape']),
+  parentId: z.string().min(1).max(80).optional(), name: z.string().max(80).optional(),
+  locked: z.boolean().optional(), visible: z.boolean().optional(), groupId: z.string().max(80).optional(),
+  rotation: z.number().min(-180).max(180).optional(), opacity: z.number().min(0).max(1).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), background: z.string().regex(/^(transparent|#[0-9a-fA-F]{6})$/).optional(),
+  borderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), borderWidth: z.number().min(0).max(5).optional(), radius: z.number().min(0).max(100).optional(),
+  shape: z.enum(['rectangle', 'ellipse']).optional(), fontFamily: z.enum(designerFonts).optional(),
+  italic: z.boolean().optional(), underline: z.boolean().optional(), lineHeight: z.number().min(.5).max(4).optional(), letterSpacing: z.number().min(-50).max(200).optional(),
+  imageFit: z.enum(['contain', 'cover']).optional(), flipX: z.boolean().optional(), flipY: z.boolean().optional(),
   text: z.string().max(2000).default(''),
+  suffix: z.string().max(2000).optional(),
   heading: z.boolean().optional(), border: z.boolean().optional(),
   field: z.string().max(100).default(''),
   x: z.number().min(0).max(297), y: z.number().min(0).max(1400),
@@ -40,6 +61,7 @@ export const elementSchema = z.object({
   align: z.enum(['left', 'center', 'right']),
   image: z.string().max(350000).regex(/^(data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+)?$/).default(''),
   columns: z.array(tableColumnSchema).min(1).max(12).optional(),
+  taxColumns: z.array(tableColumnSchema).min(1).max(12).optional(),
   tableBorders: z.boolean().optional(),
   tablePadding: z.number().min(0).max(3).optional(),
   tableStyle: documentTableStyleSchema.optional(),
@@ -48,10 +70,12 @@ export const elementSchema = z.object({
   tableRules: z.boolean().optional(),
   tableDashedRules: z.boolean().optional(),
   tableTotals: z.boolean().optional(),
-  gapBefore: z.number().min(0).max(300).optional(),
+  gapBefore: z.number().min(-300).max(300).optional(),
   gapAfter: z.number().min(0).max(30).optional(),
   inverse: z.boolean().optional(),
   doubleLine: z.boolean().optional(),
+  barcodeFormat: z.enum(barcodeFormats).optional(),
+  barcodeDisplayValue: z.boolean().optional(),
   whenField: z.string().max(100).optional(),
   visibility: z.enum(['always', 'discount', 'no-discount']).optional(),
   strikeThrough: z.enum(['never', 'always', 'discount']).optional(),
@@ -70,11 +94,24 @@ export const templateSchema = z.object({
   if (t.kind === 'receipt' && (paper ? t.width !== paper[0] || t.height !== paper[1] : t.width > 100)) ctx.addIssue({ code: 'custom', message: 'Choose a standard sheet size or a thermal width up to 100 mm' });
   if (new Set(t.elements.map(e => e.id)).size !== t.elements.length) ctx.addIssue({ code: 'custom', message: 'Element IDs must be unique' });
   for (const e of t.elements) {
-    if (e.placement === 'absolute' && e.type !== 'logo') ctx.addIssue({ code: 'custom', message: 'Free placement is available for images' });
-    if (e.placement === 'absolute' && t.paperSize && e.y + e.height > t.height) ctx.addIssue({ code: 'custom', message: 'Place the image inside the first sheet' });
+    const autoText = ['text', 'field'].includes(e.type) && ['auto-width', 'auto-height'].includes(e.resizeMode || '');
+    const checkedWidth = autoText && e.resizeMode === 'auto-width' ? 0 : e.width, checkedHeight = autoText ? 0 : e.height;
+    const [mt, mr, mb, ml] = printElementMargins(e, t.kind === 'receipt' && !e.parentId && e.placement !== 'absolute');
+    const left = e.x + ml, top = e.y + mt, right = left + checkedWidth + Math.max(0, mr), bottom = top + checkedHeight + Math.max(0, mb);
+    if (e.parentId) {
+      const parent = t.elements.find(p => p.id === e.parentId);
+      if (!parent || parent.type !== 'frame') ctx.addIssue({ code: 'custom', message: 'Place nested layers inside a frame' });
+      const seen = new Set([e.id]); let ancestor = parent, depth = 1;
+      while (ancestor) {
+        if (seen.has(ancestor.id) || ++depth > 8) { ctx.addIssue({ code: 'custom', message: 'Frames must form a tree with at most eight levels' }); break; }
+        seen.add(ancestor.id); ancestor = t.elements.find(p => p.id === ancestor?.parentId);
+      }
+      if (parent && (left < 0 || top < 0 || right > parent.width + .01 || bottom > parent.height + .01)) ctx.addIssue({ code: 'custom', message: 'Place child layers and margins inside their frame' });
+    }
+    if (e.placement === 'absolute' && t.paperSize && (top < 0 || bottom > t.height)) ctx.addIssue({ code: 'custom', message: 'Place fixed layers inside the first sheet' });
     if (t.kind === 'label' && (e.width > 100 || e.height > 100)) ctx.addIssue({ code: 'custom', message: 'Label boxes must be at most 100 mm' });
-    if (e.columns && new Set(e.columns.map(c => c.id)).size !== e.columns.length) ctx.addIssue({ code: 'custom', message: 'Table column IDs must be unique' });
-    if (e.x + e.width > t.width || (t.kind === 'label' && e.y + e.height > t.height))
+    for (const columns of [e.columns, e.taxColumns]) if (columns && new Set(columns.map(c => c.id)).size !== columns.length) ctx.addIssue({ code: 'custom', message: 'Table column IDs must be unique' });
+    if (!e.parentId && (left < 0 || right > t.width || (t.kind === 'label' && (top < 0 || bottom > t.height))))
       ctx.addIssue({ code: 'custom', message: 'Elements must fit inside the paper dimensions' });
     if (t.kind === 'label' && ['items', 'taxsummary', 'spacer'].includes(e.type)) ctx.addIssue({ code: 'custom', message: 'Tables and spacers are only available on receipts' });
   }
@@ -93,6 +130,15 @@ export const printSettingsSchema = z.object({
 export type PrintElement = z.infer<typeof elementSchema>;
 export type PrintTemplate = z.infer<typeof templateSchema>;
 export type PrintSettings = z.infer<typeof printSettingsSchema>;
+export function printElementMargins(element: Pick<PrintElement, 'margin' | 'marginSides' | 'gapBefore' | 'gapAfter'>, flowing = false): [number, number, number, number] {
+  return layerMargins(element, flowing ? [element.gapBefore ?? 0, 0, element.gapAfter ?? 1, 0] : [0, 0, 0, 0]);
+}
+/** Keep old receipt gaps readable until the layer uses the four-sided margin controls. */
+export function setPrintFlowTop(element: PrintElement, value: number) {
+  if (element.margin === undefined && !element.marginSides) { element.gapBefore = value; return; }
+  const [, right, bottom, left] = printElementMargins(element, true);
+  element.marginSides = { top: value, right, bottom, left }; delete element.margin; delete element.gapBefore; delete element.gapAfter;
+}
 export const emptyPrintSettings = (): PrintSettings => ({ version: 1, templates: [], receiptId: null, labelId: null });
 export function activeTemplate(settings: PrintSettings, kind: 'receipt' | 'label') {
   if (kind === 'label' && settings.labelId === STANDARD_LABEL_ID) return standardLabelTemplate();
@@ -103,7 +149,7 @@ export function activeTemplate(settings: PrintSettings, kind: 'receipt' | 'label
 export function noTaxReceiptTemplate(): PrintTemplate {
   return { ...taxlessReceiptTemplate(), id: NO_TAX_RECEIPT_ID, name: 'No Tax Receipt' };
 }
-export const receiptFields = ['companyName', 'companyAddress', 'gstin', 'invoiceNumber', 'date', 'paymentMethod', 'clientName', 'clientPhone', 'subtotal', 'grandTotal', 'tqty', 'tdiscount', 'thankYouNote', 'returnPolicy', 'refundPolicy', 'phone', 'upiId', 'upiPayment', 'availablePoints', 'redeemedPoints', 'couponValue', 'receiptDate', 'receiptDiscount', 'receiptSavings', 'receiptUpiPayment'];
+export const receiptFields = ['companyName', 'companyAddress', 'gstin', 'invoiceNumber', 'date', 'paymentMethod', 'clientName', 'clientPhone', 'subtotal', 'grandTotal', 'tqty', 'tdiscount', 'thankYouNote', 'returnPolicy', 'refundPolicy', 'phone', 'upiId', 'upiPayment', 'availablePoints', 'redeemedPoints', 'couponValue', 'receiptDate', 'receiptDiscount', 'receiptSavings', 'receiptUpiPayment', 'receiptTaxGroups'];
 export const labelFields = ['shopname', 'productName', 'brand', 'name', 'size', 'code', 'sprice', 'dprice', 'barcode', 'labelVariantSize'];
 export function newElement(type: PrintElement['type'], width: number): PrintElement {
   return { id: globalThis.crypto.randomUUID(), type, text: type === 'text' ? 'Your text' : '', field: '', x: 2, y: 2, width: type === 'qrcode' ? 20 : width - 4, height: type === 'barcode' ? 14 : type === 'qrcode' ? 20 : type === 'items' ? 20 : 8, fontSize: 10, bold: false, align: 'left', image: '', ...(type === 'items' ? { columns: defaultTableColumns(), tableBorders: true, tablePadding: 0.5 } : {}) };
@@ -117,18 +163,20 @@ export function standardLabelTemplate(): PrintTemplate {
   return { ...originalLabelTemplate(), id: STANDARD_LABEL_ID, name: 'Standard Label' };
 }
 
-/** Editable counterpart of the original 50 x 38 mm TSPL label. */
+/** Standard 50 x 38 mm label built exclusively from editable linked text, line and code tools. */
 export function originalLabelTemplate(): PrintTemplate {
-  const make = (type: PrintElement['type'], field: string, text: string, y: number, height: number, fontSize = 8, bold = false): PrintElement => ({ ...newElement(type, 50), field, text, y, height, fontSize, bold, align: 'left' });
-  return { id: globalThis.crypto.randomUUID(), name: 'My label', kind: 'label', width: 50, height: 38, dpi: '203', fontFamily: 'thermal', elements: [
-    make('field', 'shopname', '', 1, 5, 11, true),
-    make('line', '', '', 5, 2),
-    make('field', 'productName', '', 7, 3.5),
-    make('field', 'labelVariantSize', '', 11, 3.5),
-    { ...make('field', 'sprice', 'MRP Rs.', 15, 3.5), strikeThrough: 'discount' },
-    { ...make('field', 'dprice', 'Discount Rs.', 19, 3.5), visibility: 'discount' },
-    make('field', 'code', '', 23, 3, 7),
-    make('barcode', 'barcode', '', 26, 10),
+  const make = (type: PrintElement['type'], field: string, text: string, y: number, height: number, fontSize = 8, bold = false): PrintElement => ({ ...newElement(type, 50), field, text, y, height, fontSize, bold, align: 'left',
+    ...(['field', 'text'].includes(type) ? { fontFamily: 'Arial', lineHeight: 1.15, color: '#000000', resizeMode: 'fixed' } as const : {}) });
+  return { id: globalThis.crypto.randomUUID(), name: 'My label', kind: 'label', width: 50, height: 38, dpi: '203', fontFamily: 'sans', elements: [
+    make('field', 'shopname', '', 1.5, 4.5, 10, true),
+    { ...make('line', '', '', 5.5, 2), background: '#000000' },
+    make('field', 'productName', '', 8, 4, 8.5),
+    make('field', 'labelVariantSize', '', 12, 3.5, 7.5),
+    { ...make('field', 'sprice', 'MRP Rs. ', 16, 3.5, 7.5), rules: [priceComparisonRule('strike')] },
+    { ...make('field', 'dprice', 'Price Rs. ', 20, 4, 8.5, true), rules: [priceComparisonRule('show')] },
+    make('field', 'code', '', 24, 3, 6.5),
+    { ...make('barcode', 'barcode', '', 27.5, 6.5), barcodeFormat: 'CODE128', barcodeDisplayValue: false },
+    { ...make('field', 'barcode', '', 34.5, 3, 7), name: 'Barcode value', align: 'center' },
   ] };
 }
 
@@ -139,11 +187,29 @@ export function labelHasDiscount(data: any): boolean {
   return Number.isFinite(Number(mrp)) && Number.isFinite(Number(discounted)) && Number(discounted) >= 0 && Number(discounted) < Number(mrp);
 }
 export function elementIsVisible(element: PrintElement, data: any): boolean {
-  if (element.whenField && !fieldValue(data, element.whenField)) return false;
-  return element.visibility === 'discount' ? labelHasDiscount(data) : element.visibility === 'no-discount' ? !labelHasDiscount(data) : true;
+  return effectivePrintElement(element, data).visible !== false;
 }
 export function elementIsStruck(element: PrintElement, data: any): boolean {
-  return element.strikeThrough === 'always' || element.strikeThrough === 'discount' && labelHasDiscount(data);
+  return !!effectivePrintElement(element, data).strike;
+}
+/** Old saved properties are exposed through the same rules UI without rewriting preferences on load. */
+export function printElementRules(element: PrintElement): DesignerRule[] {
+  const rules = [...(element.rules || [])];
+  if (element.whenField) rules.unshift({id:'legacy-field',match:'all',action:'show',conditions:[{field:element.whenField,operator:'filled',source:'value',value:''}]});
+  if (element.visibility && element.visibility !== 'always') rules.push(priceComparisonRule(element.visibility === 'discount' ? 'show' : 'hide', 'legacy-visibility'));
+  if (element.strikeThrough === 'discount') rules.push(priceComparisonRule('strike','legacy-strike'));
+  return rules;
+}
+export function printConditionValue(data: any, key: string): unknown {
+  if (['receiptTaxGroups','receiptSavings','receiptDiscount','receiptDate','receiptUpiPayment','upiPayment','labelVariantSize'].includes(key)) return fieldValue(data,key);
+  if (['sprice','dprice'].includes(key)) return Object.prototype.hasOwnProperty.call(data || {},key) ? data[key] : data?.variant?.[key];
+  const raw = nestedLabelValue(data,key);
+  return raw !== undefined && (raw === null || typeof raw !== 'object') ? raw : fieldValue(data,key);
+}
+export function effectivePrintElement(element: PrintElement, data: any): PrintElement {
+  const result = applyDesignerRules({...element, rules:printElementRules(element), strike: element.strike ?? element.strikeThrough === 'always'}, key => printConditionValue(data,key));
+  delete result.whenField; delete result.visibility; delete result.strikeThrough;
+  return result;
 }
 
 export function twoLineTableColumns(): TableColumn[] {
@@ -160,25 +226,28 @@ export function twoLineTableColumns(): TableColumn[] {
   ];
 }
 export function classicReceiptTemplate(): PrintTemplate {
-  const make = (type: PrintElement['type'], options: Partial<PrintElement> = {}): PrintElement => ({ ...newElement(type, 72), height: 3, fontSize: 9, gapAfter: 0, ...options });
-  const rule = (doubleLine = false) => make('line', { height: 2, doubleLine });
-  const space = (height: number) => make('spacer', { height });
+  const margin = (top = 0, bottom = 0) => ({ top, right: 0, bottom, left: 0 });
+  const make = (type: PrintElement['type'], options: Partial<PrintElement> = {}): PrintElement => ({ ...newElement(type, 72), height: 4, fontSize: 9, marginSides: margin(), ...(['text', 'field'].includes(type) ? { resizeMode: 'auto-height' as const } : {}), ...options });
+  const rule = (options: Partial<PrintElement> = {}) => make('line', { height: 2, background: '#000000', ...options });
+  const taxVisible = { whenField: 'receiptTaxGroups' };
   const elements = [
-    make('field', { field: 'companyName', fontSize: 16, height: 6, align: 'center' }),
+    make('field', { field: 'companyName', fontSize: 16, height: 7, align: 'center' }),
     make('field', { field: 'companyAddress', height: 5, align: 'center' }),
-    make('field', { field: 'gstin', text: 'GSTIN:', height: 5, align: 'center' }), rule(),
+    make('field', { field: 'gstin', text: 'GSTIN: ', height: 5, align: 'center' }), rule(),
     make('field', { field: 'invoiceNumber', text: 'Invoice: #' }),
-    make('field', { field: 'receiptDate', text: 'Date  : ' }),
+    make('field', { field: 'receiptDate', text: 'Date: ' }),
     make('field', { field: 'paymentMethod', text: 'Payment Method: ' }), rule(),
-    make('items', { columns: twoLineTableColumns(), tableBorders: false, tableHeaderBold: false, tablePadding: 0, tableRules: true, tableItemGap: 3, tableTotals: true, height: 12 }),
-    make('field', { field: 'receiptDiscount', text: 'DISC/ROUND OFF(+/-)          ', height: 7, align: 'center' }),
+    make('items', { columns: twoLineTableColumns(), tableStyle: { cellPadding: 0, fontSize: 9, headerFontSize: 9, verticalAlign: 'top', borderWidth: .2 }, tableBorders: false, tableHeaderBold: false, tablePadding: 0, tableRules: true, tableItemGap: 3, tableTotals: true, height: 12 }),
+    make('field', { field: 'receiptDiscount', text: 'DISC/ROUND OFF: ', height: 7, align: 'center', marginSides: margin(2, 2) }),
     make('field', { field: 'grandTotal', text: 'GRAND TOTAL: ', height: 7, fontSize: 18, align: 'center' }), rule(),
-    make('field', { field: 'receiptSavings', text: 'SAVINGS: ', height: 7, fontSize: 17, align: 'center', inverse: true }), rule(), space(6),
-    make('taxsummary', { height: 15 }), space(8),
-    make('text', { text: 'Scan to pay via UPI', height: 7, align: 'center', whenField: 'receiptUpiPayment' }),
+    make('field', { field: 'receiptSavings', text: 'SAVINGS: ', height: 7, fontSize: 17, align: 'center', color: '#ffffff', background: '#000000', padding: .5 }), rule(),
+    make('text', { text: 'TAX SUMMARY', align: 'center', color: '#ffffff', background: '#000000', padding: .4, marginSides: margin(6, 1), ...taxVisible }),
+    make('taxsummary', { taxColumns: defaultTaxTableColumns(), tableStyle: { cellPadding: .4, fontSize: 9, headerFontSize: 9, verticalAlign: 'top', borderWidth: .2 }, tableBorders: false, tableHeaderBold: false, tableRules: true, tableItemGap: 0, tableTotals: false, height: 2, ...taxVisible }),
+    rule({ ...taxVisible, marginSides: margin(0, 8) }),
+    make('text', { text: 'Scan to pay via UPI', height: 7, align: 'center', marginSides: margin(0, 1), whenField: 'receiptUpiPayment' }),
     make('qrcode', { field: 'receiptUpiPayment', width: 48, x: 12, height: 48, whenField: 'receiptUpiPayment' }),
-    space(6), make('field', { field: 'thankYouNote', align: 'center', height: 6 }),
-    space(12), make('field', { field: 'phone', text: 'Customer care: ', align: 'center', height: 6 }),
+    make('field', { field: 'thankYouNote', align: 'center', height: 6, marginSides: margin(6) }),
+    make('field', { field: 'phone', text: 'Customer care: ', align: 'center', height: 6, marginSides: margin(12) }),
   ];
   elements.forEach((element, index) => { element.id = `classic-${index}`; });
   return { id: CLASSIC_RECEIPT_ID, name: 'Tax Receipt', kind: 'receipt', width: 72, height: 100, dpi: '203', fontFamily: 'thermal', elements };
@@ -188,7 +257,7 @@ export function taxlessReceiptTemplate(): PrintTemplate {
   const template = classicReceiptTemplate();
   template.id = globalThis.crypto.randomUUID();
   template.name = 'Taxless Receipt';
-  template.elements = template.elements.filter((element, index, all) => element.type !== 'taxsummary' && !(element.type === 'spacer' && all[index + 1]?.type === 'taxsummary'));
+  template.elements = template.elements.filter(element => element.type !== 'taxsummary' && element.whenField !== 'receiptTaxGroups');
   const table = template.elements.find(element => element.type === 'items')!;
   table.columns = [
     { id: 'sl', header: 'SL', field: 'rowNumber', width: 7, align: 'left' },
@@ -198,9 +267,16 @@ export function taxlessReceiptTemplate(): PrintTemplate {
     { id: 'discount', header: 'DISC', field: 'entry.discountAmount', width: 15, align: 'right', total: true },
     { id: 'value', header: 'VALUE', field: 'entry.tvalue', width: 18, align: 'right', total: true },
   ];
-  table.fontSize = 8;
+  table.fontSize = 8; table.tableStyle = { ...table.tableStyle, fontSize: 8, headerFontSize: 8 };
   table.tableDashedRules = true;
   return template;
+}
+
+/** The same resolved content is used by the inspector, raster output and static-text snapshots. */
+export function printElementValue(element: Pick<PrintElement, 'type' | 'field' | 'text' | 'suffix'>, data: any): string {
+  if (!element.field || !['field', 'barcode', 'qrcode'].includes(element.type)) return element.text;
+  const value = fieldValue(data, element.field);
+  return value ? element.text + value + (element.suffix || '') : '';
 }
 
 export function fieldValue(data: any, field: string): string {
@@ -208,6 +284,7 @@ export function fieldValue(data: any, field: string): string {
   if (field === 'item.barcode') return labelBarcode({ barcode: data?.item?.barcode, item: { barcode: data?.barcode } });
   if (field === 'labelVariantSize') return [data.name ?? data.variantName ?? data.variant?.name, data.size ?? data.item?.size].filter(value => value != null && value !== '').join(' - ');
   if (field === 'receiptDiscount') return receiptSummary(data).discountText;
+  if (field === 'receiptTaxGroups') return receiptSummary(data).tax.length ? String(receiptSummary(data).tax.length) : '';
   if (field === 'receiptSavings') return String(Number(receiptSummary(data).savings.toFixed(2)));
   if (field === 'receiptDate') {
     const date = new Date(data.date);

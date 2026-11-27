@@ -13,8 +13,9 @@ const browser = candidates.find(p => fs.existsSync(p));
 if (!browser) throw new Error('Set PRINT_TEST_BROWSER to a Chromium browser executable.');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'markit-print-test-'));
 const screenshot = process.env.PRINT_TEST_SCREENSHOT;
-const previewQuery = process.env.AFTER_SALES_PREVIEW ? '?preview='+encodeURIComponent(process.env.AFTER_SALES_PREVIEW) : ['no-tax', 'classic', 'designer', 'editor'].includes(process.env.PRINT_TEST_PRESET) ? `?preview=${process.env.PRINT_TEST_PRESET}` : '?preview=1';
+const previewQuery = process.env.AFTER_SALES_PREVIEW ? '?preview='+encodeURIComponent(process.env.AFTER_SALES_PREVIEW) : ['no-tax', 'classic', 'designer', 'editor', 'label', 'receipt', 'box', 'paint', 'empty-paint', 'codes', 'tax-tools'].includes(process.env.PRINT_TEST_PRESET) ? `?preview=${process.env.PRINT_TEST_PRESET}` : '?preview=1';
 const page = process.argv[2] || process.env.PRINT_TEST_PAGE || 'print-template-browser.html';
+const documentDesignerUi = ['document-designer-browser.html', 'document-designer-page-browser.html', 'document-designer-layers-browser.html', 'document-designer-bindings-browser.html', 'printer-designer-browser.html', 'printer-interactions-browser.html', 'designer-combinations-browser.html', 'print-template-browser.html', 'sheet-image-browser.html', 'receipt-audit-browser.html'].includes(page);
 const loansUi = page === 'loans-browser.html';
 const investorsUi = page === 'investors-browser.html';
 const investmentUi = loansUi || investorsUi;
@@ -26,11 +27,12 @@ const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
 if (!match) throw new Error('Test page must contain one module script.');
 if (afterSalesUi) console.log(`Building ${uiLabel} fixture with Nuxt UI`);
 const bundle = await build({ stdin: { contents: match[1], resolveDir: path.dirname(pageFile), sourcefile: page + '.ts' }, bundle: true, write: false, format: 'esm', platform: 'browser', alias: { '~': process.cwd(), ...(afterSalesUi ? { '#imports': path.resolve('tests/after-sales-ui-runtime.ts'), '#app':path.resolve('tests/after-sales-ui-runtime.ts'), '#build/app.config': path.resolve('tests/after-sales-ui-runtime.ts'), '#ui': path.resolve('node_modules/@nuxt/ui/dist/runtime') } : {}) }, define: { 'process.env.NODE_ENV': '"development"', __VUE_OPTIONS_API__: 'true', __VUE_PROD_DEVTOOLS__: 'false', ...(afterSalesUi ? {'import.meta.dev':'true','import.meta.client':'true','import.meta.server':'false'} : {}) }, plugins: [{ name: 'print-vue', setup(builder) {
+  if (documentDesignerUi) builder.onResolve({ filter: /^lucide-vue-next$/ }, () => ({ path: path.resolve('tests/designer-icons-fixture.mjs') }));
   builder.onLoad({ filter: /\.css$/ }, args => ({ contents: 'const style=document.createElement("style");style.textContent=' + JSON.stringify(fs.readFileSync(args.path,'utf8')) + ';document.head.appendChild(style);', loader: 'js' }));
   builder.onLoad({ filter: /\.vue$/ }, args => {
     const { descriptor } = parse(fs.readFileSync(args.path, 'utf8'), { filename: args.path });
     const id = createHash('sha1').update(args.path).digest('hex').slice(0, 8);
-    const css = descriptor.styles.map(style => compileStyle({ source: style.content, filename: args.path, id: 'data-v-' + id, scoped: !!style.scoped }).code).join('\n');
+    const css = descriptor.styles.map(style => compileStyle({ source: style.src ? fs.readFileSync(path.resolve(path.dirname(args.path), style.src), 'utf8') : style.content, filename: args.path, id: 'data-v-' + id, scoped: !!style.scoped }).code).join('\n');
     const script = compileScript(descriptor, { id, inlineTemplate: true }).content.replace('export default', 'const component =');
     let template = '';
     if (afterSalesUi && !descriptor.scriptSetup && descriptor.template) {
@@ -92,7 +94,7 @@ const server = createServer(async (req, res) => {
 try {
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const port = server.address().port;
-  const output = afterSalesUi ? await (await import('./run-ui-browser.mjs')).runUiBrowser({browser,profile,screenshot,size:process.env.PRINT_TEST_WINDOW_SIZE,url:`http://127.0.0.1:${port}/tests/${page}${screenshot?previewQuery:''}`,timeout:Number(process.env.PRINT_TEST_TIMEOUT_MS||120000)}) : await new Promise((resolve,reject) => {
+  const output = afterSalesUi || documentDesignerUi ? await (await import('./run-ui-browser.mjs')).runUiBrowser({browser,profile,screenshot,size:process.env.PRINT_TEST_WINDOW_SIZE,url:`http://127.0.0.1:${port}/tests/${page}${screenshot?previewQuery:''}`,timeout:Number(process.env.PRINT_TEST_TIMEOUT_MS||120000),failOnRuntimeError:documentDesignerUi}) : await new Promise((resolve,reject) => {
     const child = spawn(browser, ['--headless', '--disable-gpu', '--disable-background-networking', '--disable-default-apps', '--disable-extensions', '--no-first-run', '--no-default-browser-check', '--no-proxy-server', `--window-size=${process.env.PRINT_TEST_WINDOW_SIZE || '1347,667'}`, `--user-data-dir=${profile}`, `--virtual-time-budget=${process.env.PRINT_TEST_VIRTUAL_MS || 30000}`, ...(screenshot ? [`--screenshot=${path.resolve(screenshot)}`] : []), '--dump-dom', `http://127.0.0.1:${port}/tests/${process.argv[2] || process.env.PRINT_TEST_PAGE || 'print-template-browser.html'}${screenshot ? previewQuery : ''}`], { windowsHide: true });
     let result='', errors='';
     child.stdout.on('data',chunk=>{result+=chunk;if (!screenshot && result.trimEnd().endsWith('</html>')) child.kill();});

@@ -12,28 +12,38 @@ Both Settings and the actual sidebar use this single source. Existing plan, role
 invoicing, after-sales and staff-tracking gates run before presentation filtering.
 The active company's sidebar intersects its permitted menu with the saved settings;
 editing a branch changes only that branch's preferences and never the login cookie.
+After-sales appears only in ERP, immediately below Expense when the after-sales
+workflow is enabled. The Storetools/ecommerce section omits this group.
 
 `utils/sidebar-navigation.ts` owns versioned normalization, stable path/query page
 keys and recursive filtering. A disabled section or empty filtered group disappears.
 Parent destinations follow the first selected child when their original destination
-is unavailable. Each section has independent choices, including shared after-sales
-and Settings routes. CRM's client link retains `?from=crm` as part of its page key;
+is unavailable. Each section has independent choices, including shared Settings
+routes. CRM's client link retains `?from=crm` as part of its page key;
 `entryCompany` is context and is excluded from page keys. Existing page selections
 remain saved while a section/workflow is disabled. Newly available pages default to
 visible unless their saved page key was explicitly hidden.
 
 Expanded and collapsed layout sections use the same filtered menu. With zero or one
 available section, the entire switcher header is omitted in both modes; a sole
-section's pages remain visible automatically. With multiple sections the expanded
-switcher uses equal columns for two sections, spans the third section across its
-second row, and uses a balanced 2×2 grid for four.
-Compact section buttons form a centered vertical column with 40px click targets.
-Empty switchers are hidden. Each mode has one active Tab stop, visible focus rings,
-arrow-key navigation (left/right expanded, up/down compact) and Home/End selection.
+section's pages remain visible automatically. With multiple sections, the expanded
+sidebar shows section icons in one horizontal row with no filled button backgrounds.
+Each icon has a tooltip and accessible section name, a 40px click target, and an
+orange underline for the active section. Left/Right and Home/End select sections;
+only the active icon is a Tab stop, with a visible keyboard focus ring.
+Collapsed sections use the same icons in a centered vertical column with an active
+left marker, Up/Down and Home/End selection. Only enabled, nonempty sections appear.
+Empty switchers are hidden.
 The custom
 `Accountant/SidebarNavigation.vue` accepts `allowedPaths`, filters its internal
 sections and drops empty ones; neither layout can restore hidden Account pages.
 Route-based section selection falls back to the first nonempty enabled section.
+`layouts/default.vue` keeps the selected section in company-keyed Nuxt state so
+layout remounts retain the choice. CRM routes (including `/client?from=crm`),
+Connect, after-sales and Storetools-specific routes select their owning section.
+Shared Settings destinations preserve the originating section;
+refreshing preferences on the same route does not reset an enabled selection.
+Disabling the selected section still falls back to an available section.
 When all sections/pages are hidden, the user-menu Settings link remains available
 in both sidebar modes. Hiding navigation changes presentation only; existing route
 and API authorization remains responsible for access. Keyboard shortcuts and direct
@@ -67,8 +77,8 @@ Focused verification lives in `tests/sidebar-navigation.test.ts` and
 `tests/sidebar-navigation-browser.html`. The browser fixture mounts the real layout,
 settings editor, shared composable and custom Account navigation with presentation
 stubs and mocked HTTP. It checks all 15 nonempty section combinations at sidebar
-widths 200, 250 and 300px in both modes, including actual button bounds, label fit,
-centering and keyboard selection. It does not send customer messages or modify live
+widths 200, 250 and 300px in both modes, including single-row icon placement, accessible names, section selection,
+collapsed icon bounds, centering and keyboard selection. It does not send customer messages or modify live
 data. The browser runner's `--preview` option displays the four section counts for
 visual inspection; `PRINT_TEST_SCREENSHOT` optionally captures that fixture.
 

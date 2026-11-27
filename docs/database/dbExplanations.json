@@ -122,31 +122,6 @@
         "updatedAt": "Timestamp of the latest accepted CRM change."
       }
     },
-    "CrmAccount": {
-      "purpose": "Company-owned business account grouping existing clients, opportunities and activities; archiving preserves history.",
-      "fields": {
-        "id": "Server-generated UUID identifying this CRM record.",
-        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
-        "company": "Owning company relation; company deletion cascades to its CRM records.",
-        "name": "User-visible name of this company CRM record.",
-        "industry": "Business industry classification.",
-        "website": "Validated HTTPS business website without embedded credentials.",
-        "email": "CRM email address; storing it does not grant email subscription consent.",
-        "phone": "CRM international phone number; imported existing client snapshots may retain historical formatting.",
-        "address": "Business contact/postal address as company-local text.",
-        "ownerId": "Assigned active staff user; only managers may assign another owner.",
-        "tags": "Company-local searchable tags; not a source of marketing permission.",
-        "description": "Company-local notes/description, independent of shared Client identity.",
-        "archived": "Soft archive flag; history and connected commercial records are preserved.",
-        "version": "Optimistic revision starting at 1; stale saves are rejected, and accepted mutations increment it.",
-        "createdBy": "Authenticated staff ID that created the record.",
-        "createdAt": "Timestamp when the record was created.",
-        "updatedAt": "Timestamp of the latest accepted CRM change.",
-        "clients": "Existing company client memberships grouped by this account; raw CRM relation ignored by generated operations.",
-        "deals": "Company-scoped opportunities linked to this account or contact.",
-        "activities": "Company-scoped tasks and conversation notes linked to this record."
-      }
-    },
     "CrmDeal": {
       "purpose": "Company opportunity with configured pipeline/stage, saved outcome/probability and value in company currency. Won outcomes do not post invoices, payments or stock.",
       "fields": {
@@ -155,8 +130,6 @@
         "company": "Owning company relation; company deletion cascades to its CRM records.",
         "clientId": "Optional existing Client ID in the owning company membership; no separate contact identity.",
         "client": "CompanyClient relation protected by a compound company/client foreign key.",
-        "accountId": "Optional business account in the same company.",
-        "account": "Business account relation, protected by a composite company/account foreign key.",
         "name": "User-visible name of this company CRM record.",
         "pipelineKey": "Stable pipeline identifier in the owning company’s versioned settings.",
         "stageKey": "Stable stage identifier within the chosen pipeline.",
@@ -188,8 +161,6 @@
         "company": "Owning company relation; company deletion cascades to its CRM records.",
         "clientId": "Optional existing Client ID in the owning company membership; no separate contact identity.",
         "client": "CompanyClient relation protected by a compound company/client foreign key.",
-        "accountId": "Optional business account in the same company.",
-        "account": "Business account relation, protected by a composite company/account foreign key.",
         "dealId": "Related deal in the same company.",
         "deal": "Deal relation, protected by a composite company/deal foreign key.",
         "kind": "Validated activity type or linked document category; determines workflow behavior.",
@@ -269,7 +240,6 @@
       "fields": {
         "id": "Primary key identifying this Company record.",
         "crmSettings": "Company’s versioned dedicated sales CRM settings.",
-        "crmAccounts": "Company-local business accounts.",
         "crmDeals": "Company opportunities and their sales outcomes.",
         "crmTasks": "Company CRM activities: tasks, meetings and logged conversations.",
         "crmDocuments": "Company-checked deal/document references.",
@@ -2409,8 +2379,6 @@
       "fields": {
         "crmData": "Raw CRM API JSON for company-only owner, qualification, lifecycle, source, tags, custom values, job title, notes and CRM timestamps; never duplicates shared identity or consent. Ignored by generated operations.",
         "crmVersion": "Raw CRM API optimistic version; defaults to zero for existing memberships and prevents stale updates. Ignored by generated operations.",
-        "crmAccountId": "Optional same-company CRM business account ID maintained by raw CRM APIs; ignored by generated operations.",
-        "crmAccount": "Raw-only company/account relation; restricts account removal while existing memberships refer to it.",
         "crmDeals": "Opportunities that directly reference this existing company/client membership.",
         "crmTasks": "CRM activities that directly reference this existing company/client membership.",
         "expenses": "Expenses assigned to this client within this company.",

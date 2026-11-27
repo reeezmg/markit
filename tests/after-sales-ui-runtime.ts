@@ -10,3 +10,12 @@ export const useRouter = () => ({ push: (to: any) => (window as any).navigateTo(
 export const useNuxtApp = () => ({ $config: {}, hook: () => {}, $i18n: undefined })
 export const useRuntimeConfig = () => ({ public: {}, app: { baseURL: '/' } })
 export const useColorMode = () => ref('light')
+
+export const useToast = () => ({ add: (notification: any) => {
+  const target = window as any
+  ;(target.crmToasts ||= []).push(notification)
+  let host = document.querySelector('#test-toasts')
+  if (!host) { host = document.createElement('div'); host.id = 'test-toasts'; host.setAttribute('aria-live', 'polite'); document.body.append(host) }
+  host.textContent = notification.title
+  return notification
+} })

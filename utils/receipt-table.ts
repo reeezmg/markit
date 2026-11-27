@@ -5,6 +5,10 @@ export const receiptTableVariables: LabelVariable[] = [
   { key: 'rowNumber', label: 'Row number', group: 'Bill item', sample: 1 },
   ...labelVariables.filter(v => /^(product|variant|item)\./.test(v.key)),
 ];
+export const receiptTaxTableVariables: LabelVariable[] = [
+  { key: 'rowNumber', label: 'Row number', group: 'Tax summary', sample: 1 },
+  ...[['rate', 'Tax rate (%)'], ['sgst', 'SGST amount'], ['cgst', 'CGST amount'], ['total', 'Total tax']].map(([key, label]) => ({ key: `tax.${key}`, label, group: 'Tax summary', sample: '' })),
+];
 export function receiptTableFields(template: PrintTemplate) {
   return [...new Set(template.elements.flatMap(e => e.type === 'items' ? (e.columns || []).map(c => c.field).filter(key => /^(product|variant|item)\./.test(key)) : []))];
 }
@@ -12,6 +16,7 @@ export function tableCellValue(entry: any, key: string, index: number) {
   if (entry.receiptTableValues && Object.prototype.hasOwnProperty.call(entry.receiptTableValues, key)) return String(entry.receiptTableValues[key] ?? '');
   if (key === 'entry.discountAmount') return lineDiscountAmount(entry).toFixed(2);
   if (key === 'rowNumber') return String(index + 1);
+  if (key.startsWith('tax.')) { const field = key.slice(4), value = entry[field]; return value == null || !Number.isFinite(Number(value)) ? '' : field === 'rate' ? String(value) : Number(value).toFixed(2); }
   if (key.startsWith('entry.')) {
     const field = key.slice(6);
     const value = entry[field];
@@ -26,8 +31,8 @@ export function tableColumnLines(columns: TableColumn[]) {
 }
 export function tableColumnTotal(entries: any[], column: TableColumn) {
   if (column.totalLabel) return column.totalLabel;
-  if (!column.total || !/^entry\.(qty|mrp|value|discount|discountAmount|tvalue)$/.test(column.field)) return '';
-  const field = column.field.slice(6);
+  if (!column.total || !/^entry\.(qty|mrp|value|discount|discountAmount|tvalue)$/.test(column.field) && !/^tax\.(sgst|cgst|total)$/.test(column.field)) return '';
+  const field = column.field.slice(column.field.startsWith('tax.') ? 4 : 6);
   const number = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
   const sum = entries.reduce((sum, entry) => {
     if (field === 'discountAmount') return sum + lineDiscountAmount(entry);

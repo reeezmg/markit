@@ -1,4 +1,4 @@
-Dedicated sales CRM (revised 2026-11-19): `CrmSettings`, `CrmAccount`, `CrmDeal`,
+Dedicated sales CRM (revised 2026-11-19): `CrmSettings`, `CrmDeal`,
 `CrmActivity`, `CrmDocumentLink` and `CrmAudit` are scoped, raw-API-owned models.
 CrmSettings.settings.salesRules contains validated sales-state-to-deal-stage rules
 and server-controlled activation revisions. CrmAudit sales-rule entries track each
@@ -10,8 +10,8 @@ JSON envelope with references, segmentKey and segmentName for company-local save
 segment links. The raw API flattens this metadata; recurrence preserves it. This
 extends an existing JSON contract without physical schema changes.
 Contacts reuse Client + CompanyClient and the existing /client page; CrmContact is
-removed from the unapplied design. CompanyClient's crmData/crmVersion/crmAccountId
-store only company CRM attributes, concurrency and account association. Those fields
+removed from the unapplied design. CompanyClient's crmData/crmVersion
+store only company CRM attributes and concurrency. Those fields
 use @prisma.passthrough("@ignore") so Prisma retains the physical columns for db push
 while excluding them from generated client operations and keeping writes in
 authenticated CRM APIs. Bare ZenStack @ignore removes physical fields from generated
@@ -945,3 +945,19 @@ Saved remark→operation lookup for auto-matching future statements. Per-company
 ### Attendance adjustment mutation ownership
 
 Generated AttendanceAdjustment create/update/delete operations are denied. Custom request APIs validate ownership and pending state; cancellation retains the row as CANCELLED. The management-only decision endpoint remains responsible for approval/rejection and atomic attendance/log correction. No database column migration is required for this permission change.
+
+
+### CRM business-account removal
+
+`CrmAccount` and its Company/CompanyClient/deal/activity relations are removed from
+`schema.zmodel`; the remaining CRM entities link directly to existing company
+clients. Lead scoring and saved-segment filters have no business-account signal.
+Prepared migration `20261123190000_remove_crm_business_accounts` removes only
+`crm_accounts`, `company_clients.crm_account_id`, `crm_deals.account_id` and
+`crm_activities.account_id`, plus retired account scoring/filter settings. Audit
+history, client identities, deals, tasks and finance accounts remain intact.
+The migration was separately authorized and applied on 23 November 2026 after source
+preparation. A fresh backup and before/after fingerprints verified preserved records,
+removal and CRM readiness. Application is recorded in local verification artifacts,
+not Prisma migration history. Future applications still require separate explicit
+authorization. The backup procedure and deployment order are in ARCH-crm.md.

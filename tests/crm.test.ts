@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client'
 import { test } from 'node:test'
 import { Readable } from 'node:stream'
 import { createEvent } from 'h3'
-import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv, crmClientLocation, type CrmSalesRule } from '../utils/crm'
+import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv, crmClientLocation, crmKinds, type CrmSalesRule } from '../utils/crm'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { crmWhere, crmList, crmRow, saveCrmRecord, saveCrmSettings, archiveCrmRecords } from '../server/utils/crm'
 import { crmImport, crmRead, linkCrmDocument } from '../server/utils/crm-workflows'
@@ -165,10 +165,11 @@ test('Contacts reuse the client page and physical CRM columns remain excluded fr
   assert(!existsSync('pages/crm/contacts/index.vue'));assert(!existsSync('pages/crm/contacts/[contactId].vue'))
   assert(!/^model CrmContact\s*\{/m.test(readFileSync('schema.zmodel','utf8')))
   const membership=Prisma.dmmf.datamodel.models.find(model=>model.name==='CompanyClient')!
-  for(const name of ['crmData','crmVersion','crmAccountId'])assert(!membership.fields.some(field=>field.name===name),'Generated client reads must not select '+name)
+  for(const name of ['crmData','crmVersion'])assert(!membership.fields.some(field=>field.name===name),'Generated client reads must not select '+name)
   const physicalSchema=readFileSync('prisma/schema.prisma','utf8')
-  for(const name of ['crmData','crmVersion','crmAccountId'])assert(new RegExp('^\\s*'+name+'\\s+[^\\n]*@ignore','m').test(physicalSchema),'db push must retain ignored physical column '+name)
-  assert(!Prisma.dmmf.datamodel.models.some(model=>model.name==='CrmContact'))
+  for(const name of ['crmData','crmVersion'])assert(new RegExp('^\\s*'+name+'\\s+[^\\n]*@ignore','m').test(physicalSchema),'db push must retain ignored physical column '+name)
+  assert(!Prisma.dmmf.datamodel.models.some(model=>['CrmContact','CrmAccount'].includes(model.name)))
+  assert(!physicalSchema.includes('crmAccountId'))
 })
 
 test('CRM validates contact identity, custom fields, scoring and configured deal outcomes',()=>{
@@ -184,7 +185,7 @@ test('CRM validates contact identity, custom fields, scoring and configured deal
 })
 test('CRM settings reject duplicate or incomplete pipelines, unsafe links and invalid recurrence',()=>{
   const settings=defaultCrmSettings();settings.pipelines[0].stages.pop();assert.throws(()=>normalizeCrmSettings(settings),/lost/)
-  assert.throws(()=>normalizeCrmRecord('accounts',{name:'Account',ownerId:'sales',website:'javascript:alert(1)'}),/HTTPS/)
+  assert.throws(()=>normalizeCrmRecord('deals',{name:'Offer',ownerId:'sales',accountId:'retired'}),/no longer supported/)
   assert.throws(()=>normalizeCrmRecord('activities',{ownerId:'sales',subject:'Call',recurrenceDays:7}),/due date/)
   assert.throws(()=>normalizeCrmRecord('activities',{ownerId:'sales',subject:'Call',dueAt:'2026-11-19T10:00:00Z',endAt:'2026-11-18T10:00:00Z'}),/end time/)
 })
@@ -199,12 +200,12 @@ test('Company filters bind user input and calculate score/due restrictions befor
   assert(sql.includes('r.company_id=$1'));assert(!sql.includes('OR 1=1'));assert(args.includes("%%' OR 1=1 --%"));assert(sql.includes('LEAST(100'))
   assert(crmWhere('activities','a',{due:'OVERDUE'},defaultCrmSettings()).sql.includes('r.due_at<now()'))
 })
-test('Lead → account → deal → won → recurring follow-up keeps versions, ownership and audit history',async()=>{
+test('Lead to deal to won and recurring follow-up keeps versions, ownership and audit history',async()=>{
   await assert.rejects(saveCrmRecord(crmFixture(),{...manager,userId:'head-office-admin',role:'admin'},'activities',{subject:'Unlinked owner',ownerId:'head-office-admin'}),{statusCode:400})
-  const db=crmFixture(),account=await saveCrmRecord(db,manager,'accounts',{name:'Example Business',ownerId:'sales'})
-  const clientId=db.seedClient();const lead=await saveCrmRecord(db,manager,'clients',{...contact,clientId,accountId:account.id,version:0},clientId)
+  const db=crmFixture()
+  const clientId=db.seedClient();const lead=await saveCrmRecord(db,manager,'clients',{...contact,clientId,version:0},clientId)
   assert.equal(db.state.tables.crm_activities.length,1,'new lead gets its internal next action')
-  const deal=await saveCrmRecord(db,sales,'deals',{name:'Purifier supply',clientId:lead.id,accountId:account.id,ownerId:'sales',pipelineKey:'sales',stageKey:'proposal',value:12500})
+  const deal=await saveCrmRecord(db,sales,'deals',{name:'Purifier supply',clientId:lead.id,ownerId:'sales',pipelineKey:'sales',stageKey:'proposal',value:12500})
   await assert.rejects(saveCrmRecord(db,{...sales,userId:'other'},'deals',{...deal,name:'Unauthorized'},deal.id),{statusCode:403})
   const won=await saveCrmRecord(db,sales,'deals',{...deal,stageKey:'won'},deal.id)
   assert.equal(won.status,'WON');assert.equal(won.probability,100);assert(won.closedAt)
@@ -215,7 +216,7 @@ test('Lead → account → deal → won → recurring follow-up keeps versions, 
   assert.equal(db.state.tables.crm_activities.filter((r:any)=>r.recurrence_key==='repeat:'+task.id).length,1)
   await saveCrmRecord(db,sales,'activities',{...done,body:'Extra completion note'},task.id)
   assert.equal(db.state.tables.crm_activities.filter((r:any)=>r.recurrence_key==='repeat:'+task.id).length,1)
-  assert(db.state.tables.crm_audit.length>=7)
+  assert(db.state.tables.crm_audit.length>=6)
   await assert.rejects(saveCrmRecord(db,{...manager,companyId:'b'},'deals',{...won},deal.id),{statusCode:404})
 })
 test('Existing client identities are immediately available; CRM edits preserve membership and consent',async()=>{
@@ -254,6 +255,16 @@ test('Client CRM CSV requires scoped existing IDs, rejects duplicate rows and ne
   await assert.rejects(crmImport(db,manager,{records}),{statusCode:409});assert.equal(db.state.memberships[0].crm_version,0)
   await crmImport(db,manager,{records:[records[0]]});assert.equal(db.state.memberships[0].crm_data.description,'Imported notes');assert.equal(db.state.clients.length,1)
 })
+test('Formula-safe exports round-trip canonical names and international phones without identity edits',async()=>{
+  const db=crmFixture();db.seedClient('a','formula-name',{name:'=QA name'});db.seedClient('a','literal-name',{name:"'=Literal name"});db.seedClient('a','spaced-name',{name:'  =Spaced legacy name  '})
+  const settings=defaultCrmSettings();settings.sources.push('@Event');settings.customFields=[{key:'expression',label:'Expression',type:'TEXT',required:false},{key:'negative',label:'Negative',type:'NUMBER',required:false}];await saveCrmSettings(db,manager,{settings,version:0})
+  await saveCrmRecord(db,manager,'clients',{version:0,ownerId:'manager',source:'@Event',tags:['=VIP'],customFields:{expression:'=SUM(1,2)',negative:-42}},'formula-name')
+  const list=await crmList(db,manager,'clients',{}),csv=crmCsv(list.rows.map(r=>({...r,'custom:Expression':r.customFields.expression,'custom:Negative':r.customFields.negative})),[['clientId','Client ID'],['name','Name'],['phone','Phone'],['source','Source'],['tags','Tags'],['custom:Expression','custom:Expression'],['custom:Negative','custom:Negative']]),records=parseCrmCsv(csv)
+  const before=structuredClone(db.state.clients),preview=await crmImport(db,manager,{preview:true,records})
+  assert.equal(preview.valid,3,JSON.stringify(preview.errors));await crmImport(db,manager,{records});assert.deepEqual(db.state.clients,before);assert.equal(db.state.memberships.find((m:any)=>m.client_id==='formula-name').crm_data.customFields.expression,'=SUM(1,2)');assert.equal(db.state.memberships.find((m:any)=>m.client_id==='formula-name').crm_data.customFields.negative,-42);assert.deepEqual(db.state.memberships.find((m:any)=>m.client_id==='formula-name').crm_data.tags,['=VIP'])
+  const invalid=await crmImport(db,manager,{preview:true,records:[{...records[0],phone:"'+919000000000"}]});assert.equal(invalid.valid,0)
+})
+
 test('CSV custom values preserve numeric zero and explicit false on existing memberships',async()=>{
   const db=crmFixture(),id=db.seedClient('a','jamie',{name:'Jamie'}),settings=defaultCrmSettings()
   settings.customFields=[{key:'budget',label:'Budget',type:'NUMBER',required:true},{key:'follow',label:'Contact later',type:'BOOLEAN',required:true}]
@@ -280,6 +291,7 @@ test('Real CRM handlers enforce tenant, live staff role, CSRF, manager reports a
   try{
     const clientId=db.seedClient();await assert.rejects(handler(event('clients','POST',contact)),{statusCode:400});const created:any=await handler(event('clients/'+clientId,'PUT',{...contact,version:0}));assert.equal(created.id,clientId)
     const list:any=await handler(event('clients'));assert.equal(list.total,1)
+    for(const method of ['GET','POST','PUT'])await assert.rejects(handler(event('accounts',method,{name:'Retired'})),{statusCode:410})
     await assert.rejects(handler(event('clients','GET',undefined,'b')),{statusCode:403})
     await assert.rejects(handler(event('clients','POST',contact,'a','https://evil.test')),{statusCode:403})
     assert.equal((await handler(event('sales-rules/run','POST',{})) as any).updated,0)
@@ -287,4 +299,30 @@ test('Real CRM handlers enforce tenant, live staff role, CSRF, manager reports a
     user='manager';db.state.ready=false;const bootstrap:any=await handler(event('bootstrap'));assert.equal(bootstrap.ready,false);await assert.rejects(handler(event('clients')),{statusCode:503})
     await assert.rejects(cron(event('anything')),{statusCode:401})
   }finally{(pool as any).query=originalQuery;(pool as any).connect=originalConnect;(globalThis as any).requireAuthSession=auth}
+})
+
+
+test('CRM operates without business-account tables, links, filters or scoring',async()=>{
+  assert.deepEqual(crmKinds,['clients','deals','activities'])
+  const legacy:any=defaultCrmSettings();legacy.scoring.account=95
+  legacy.segments=[{key:'legacy',name:'Legacy',filters:{accountId:'old',source:'Other'}}]
+  const settings=normalizeCrmSettings(legacy)
+  assert(!('account' in settings.scoring));assert.deepEqual(settings.segments[0].filters,{source:'Other'})
+  assert.equal(crmScore({...contact,account_id:'old'},settings),crmScore(contact,settings))
+  const filters=crmWhere('clients','a',{accountId:'old',minScore:1},settings)
+  assert(!filters.sql.includes('account_id'));assert(!filters.args.includes('old'))
+  assert.deepEqual(crmRow({id:'a',account_id:'old',account_name:'Old account'}),{id:'a'})
+  const fixture=crmFixture(),queries:string[]=[]
+  const db={query:async(sql:string,args?:any[])=>{queries.push(sql);assert(!/crm_accounts|crm_account_id|account_id/.test(sql));return fixture.query(sql,args)}}
+  const id=fixture.seedClient()
+  const client=await saveCrmRecord(db,manager,'clients',{...contact,version:0},id)
+  const deal=await saveCrmRecord(db,sales,'deals',{name:'Account-free deal',ownerId:'sales',clientId:client.id,pipelineKey:'sales',stageKey:'new'})
+  const task=await saveCrmRecord(db,sales,'activities',{ownerId:'sales',subject:'Follow up',dealId:deal.id,dueAt:'2026-11-23T10:00:00Z',recurrenceDays:3})
+  assert.equal(task.clientId,id,'Deal context still prefills the linked client')
+  await saveCrmRecord(db,sales,'activities',{...task,status:'DONE'},task.id)
+  const repeat=fixture.state.tables.crm_activities.find((row:any)=>row.recurrence_key==='repeat:'+task.id)
+  assert.equal(repeat.client_id,id);assert.equal(repeat.deal_id,deal.id)
+  assert.equal(repeat.owner_id,'sales');assert.equal(repeat.subject,'Follow up')
+  for(const kind of crmKinds)await crmList(db,manager,kind,{})
+  assert(queries.length>0)
 })

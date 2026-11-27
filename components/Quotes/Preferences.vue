@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { emptyQuotePreferences, normalizeQuotePreferences, type QuotePreferences } from '~/utils/quote-preferences'
-import QuoteDesignEditor from '~/components/Quotes/DesignEditor.vue'
+import { documentDesignDraftKey, useDocumentDesignDraft } from '~/composables/useDocumentDesignDraft'
 import { billingErrorMessage } from '~/utils/billing-error'
 const props = defineProps<{ modelValue: boolean; documentKind?: 'quote' | 'sales-order' }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
@@ -8,30 +8,46 @@ const isSalesOrder = props.documentKind === 'sales-order'
 const documentTitle = isSalesOrder ? 'Sales order' : 'Quote', documentName = isSalesOrder ? 'sales order' : 'quote'
 const preferencesPath = isSalesOrder ? '/api/sales-orders/preferences' : '/api/quotes/preferences'
 const scope = useCompanyScope()
+const route = useRoute(), designDrafts = useDocumentDesignDraft()
+const draftKey = computed(() => documentDesignDraftKey(scope.companyId.value, isSalesOrder ? 'sales-order' : 'quote'))
 const toast = useToast()
-const open = computed({ get: () => props.modelValue, set: value => { if (!saving.value && !designOpen.value) emit('update:modelValue', value) } })
+const open = computed({ get: () => props.modelValue, set: value => {
+  if (saving.value) return
+  if (!value) delete designDrafts.value[draftKey.value]
+  emit('update:modelValue', value)
+} })
 const draft = ref<QuotePreferences>(emptyQuotePreferences())
-const documentCompany = ref<any>(null)
-const designOpen = ref(false), savedDesign = ref('')
+const savedDesign = ref('')
 const loading = ref(false), saving = ref(false), error = ref(''), canManage = ref(false)
 let version = 0
 async function load() {
   const request = ++version; loading.value = true; error.value = ''; canManage.value = false
   try {
     const result = await scope.fetch<any>(preferencesPath)
-    if (request === version) { draft.value = normalizeQuotePreferences(result.preferences); documentCompany.value = result.company || null; canManage.value = result.canManage; savedDesign.value = JSON.stringify(draft.value.documentDesign) }
+    if (request === version) {
+      draft.value = normalizeQuotePreferences(designDrafts.value[draftKey.value]?.preferences || result.preferences)
+      delete designDrafts.value[draftKey.value]
+      canManage.value = result.canManage
+      savedDesign.value = JSON.stringify(normalizeQuotePreferences(result.preferences).documentDesign)
+    }
   } catch (e) { if (request === version) error.value = billingErrorMessage(e) }
   finally { if (request === version) loading.value = false }
 }
 watch(() => props.modelValue, value => { if (value) void load(); else version++ })
 onBeforeUnmount(() => { version++ })
+async function openDesign() {
+  if (saving.value || loading.value || !canManage.value) return
+  designDrafts.value[draftKey.value] = { preferences: JSON.parse(JSON.stringify(draft.value)), savedDesign: savedDesign.value, returnTo: route.fullPath }
+  await navigateTo({ path: isSalesOrder ? '/erp/sales-orders/design' : '/erp/quotes/design', query: { entryCompany: scope.companyId.value } })
+}
 async function save() {
   if (saving.value || loading.value || !canManage.value) return
   error.value = ''; saving.value = true
   try {
     const value = normalizeQuotePreferences(draft.value)
     await scope.fetch(preferencesPath, { method: 'PUT', body: value })
-    savedDesign.value = JSON.stringify(value.documentDesign); designOpen.value = false
+    savedDesign.value = JSON.stringify(value.documentDesign)
+    delete designDrafts.value[draftKey.value]
     emit('saved'); emit('update:modelValue', false)
     toast.add({ title: `${documentTitle} preferences saved`, color: 'green' })
   } catch (e) { error.value = billingErrorMessage(e) }
@@ -40,7 +56,7 @@ async function save() {
 </script>
 
 <template>
-  <USlideover v-model="open" side="right" :ui="{ width: 'max-w-2xl' }" :prevent-close="saving || designOpen">
+  <USlideover v-model="open" side="right" :ui="{ width: 'max-w-2xl' }" :prevent-close="saving">
     <form class="flex h-full flex-col" :aria-label="`${documentTitle} preferences`" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3 border-b border-gray-200 px-6 py-5 dark:border-gray-800">
         <div><h2 class="text-lg font-semibold">{{ documentTitle }} preferences</h2><p class="mt-1 text-sm text-gray-500">Defaults for {{ documentName }} documents in this company.</p></div>
@@ -52,7 +68,7 @@ async function save() {
         <UButton v-if="error && !canManage" color="gray" @click="load">Retry</UButton>
         <p v-if="!loading && !error && !canManage" class="text-sm text-gray-500">Administrators, managers and accountants can change these preferences.</p>
         <fieldset v-if="!loading && !error || canManage" :disabled="saving || !canManage" class="space-y-6">
-          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"><h3 class="font-medium">{{ documentTitle }} design</h3><p class="mb-3 mt-1 text-sm text-gray-500">Customize your {{ documentName }} with header and footer images, text, live fields and table columns.</p><UButton color="gray" icon="i-heroicons-paint-brush" @click="designOpen = true">Design {{ documentName }}</UButton></div>
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"><h3 class="font-medium">{{ documentTitle }} design</h3><p class="mb-3 mt-1 text-sm text-gray-500">Customize your {{ documentName }} in the full-page print designer.</p><UButton color="gray" icon="i-heroicons-paint-brush" @click="openDesign">Design {{ documentName }}</UButton></div>
           <div class="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800">
             <UCheckbox v-model="draft.allowAcceptedEdits" :label="isSalesOrder ? 'Allow editing of closed or cancelled sales orders' : 'Allow editing of accepted quotes'" aria-label="Allow editing accepted quotes" />
             <UCheckbox v-if="!isSalesOrder" v-model="draft.allowCustomerApproval" label="Allow customers to accept or decline quotes through a public link or WhatsApp" aria-label="Allow customer quote approval" />
@@ -75,7 +91,6 @@ async function save() {
         </fieldset>
       </div>
       <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-800"><UButton color="gray" :disabled="saving" @click="open = false">Cancel</UButton><UButton type="submit" :loading="saving" :disabled="loading || !canManage">Save preferences</UButton></div>
-      <QuoteDesignEditor v-if="designOpen" v-model="draft.documentDesign" :company="documentCompany || scope.auth.session.value" :busy="saving" :error="error" :saved-design="savedDesign" :document-kind="documentKind" @close="designOpen = false" @save="save" />
     </form>
   </USlideover>
 </template>

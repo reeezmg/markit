@@ -18,6 +18,8 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
     import * as Vue from 'vue';
     import * as Router from 'vue-router';
     import Quotes from './pages/erp/quotes/index.vue';
+    import QuoteDesignPage from './pages/erp/quotes/design.vue';
+    import OrderDesignPage from './pages/erp/sales-orders/design.vue';
     import SalesOrders from './pages/erp/sales-orders/index.vue';
     import AddSalesOrder from './pages/erp/sales-orders/add.vue';
     import EditSalesOrder from './pages/erp/sales-orders/edit/[orderId].vue';
@@ -35,6 +37,7 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
     const router=Router.createRouter({history:Router.createWebHistory(),routes:[
       {path:'/erp/sales-orders',component:SalesOrders},{path:'/erp/sales-orders/add',component:AddSalesOrder},{path:'/erp/sales-orders/edit/:orderId',component:EditSalesOrder},
       {path:'/erp/quotes',component:Quotes},{path:'/erp/quotes/add',component:AddQuote},
+      {path:'/erp/quotes/design',component:QuoteDesignPage},{path:'/erp/sales-orders/design',component:OrderDesignPage},
       {path:'/erp/quotes/edit/:quoteId',component:EditQuote},
       {path:'/erp/invoice-drafts',component:InvoiceDrafts},{path:'/quote/:token',component:PublicQuote},
     ]});
@@ -80,10 +83,14 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
       if(url==='/api/quotes/quote')return {...saved,documentDesign:preferences.documentDesign};
       throw Error('Unexpected request: '+url);
     };
+    const designerState=new Map();
+    window.designerHistory=key=>document.querySelector('.quote-editing-canvas').dispatchEvent(new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true}));
     Object.assign(globalThis,Vue,{
       definePageMeta(){},useHead(){},useToast:()=>({add:value=>toasts.push(value)}),
       $fetch:fetch,
       useRoute:Router.useRoute,
+      navigateTo:to=>router.push(to),
+      useState:(key,init)=>{if(!designerState.has(key))designerState.set(key,Vue.ref(init()));return designerState.get(key)},
       useCompanyScope:()=>({ready:Promise.resolve(),companyId:Vue.ref('company'),auth:{session:Vue.ref({companyId:'company',companyName:'Demo Store',currency:'INR',isTaxIncluded:true})},fetch}),
       useAsyncData:async(key,fn,options)=>{
         const data=Vue.ref(null),pending=Vue.ref(false),error=Vue.ref(null);
@@ -122,11 +129,12 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
   const bundle = await build({ stdin: { contents: entry, resolveDir: process.cwd(), sourcefile: 'quote-fixture.ts' },
     bundle: true, write: false, format: 'iife', platform: 'browser', alias: { '~': process.cwd() },
     plugins: [{ name: 'quote-vue', setup(builder) {
+      builder.onResolve({ filter: /^lucide-vue-next$/ }, () => ({ path: resolve('tests/designer-icons-fixture.mjs') }));
       builder.onLoad({filter:/erp-document-export\.client\.ts$/},()=>({contents:'export async function exportDocumentTable(kind,title,columns,rows){window.quoteFixture.exports.push({kind,title,columns,rows})}',loader:'ts'}));
       builder.onLoad({ filter: /\.vue$/ }, args => {
         const { descriptor } = parse(readFileSync(args.path, 'utf8'), { filename: args.path })
         const id = createHash('sha1').update(args.path).digest('hex').slice(0, 8)
-        const css = descriptor.styles.map(style => compileStyle({ source: style.content, filename: args.path, id: 'data-v-' + id, scoped: !!style.scoped }).code).join('\n')
+        const css = descriptor.styles.map(style => compileStyle({ source: style.src ? readFileSync(resolve(dirname(args.path), style.src), 'utf8') : style.content, filename: args.path, id: 'data-v-' + id, scoped: !!style.scoped }).code).join('\n')
         const script = compileScript(descriptor, { id, inlineTemplate: true }).content.replace('export default', 'const component =')
         return { contents: script + '\ncomponent.__scopeId = ' + JSON.stringify('data-v-' + id) + '; export default component; const style = document.createElement("style"); style.textContent = ' + JSON.stringify(css) + '; document.head.appendChild(style);', loader: 'ts', resolveDir: dirname(args.path) }
       })
@@ -143,13 +151,14 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
   const child = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
     '--no-default-browser-check', '--remote-debugging-port=0', '--remote-allow-origins=*', `--user-data-dir=${profile}`, 'about:blank'],
   { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
-  t.after(() => { child.kill() })
+  t.after(() => { child.kill(); child.stderr?.destroy(); child.unref() })
   const endpoint = await new Promise<string>((done, fail) => {
     let output = ''; const timer = setTimeout(() => fail(Error('Chrome launch timed out')), 15000)
     child.on('error', error => { clearTimeout(timer); fail(error) })
     child.stderr!.on('data', data => { output += data; const match = output.match(/DevTools listening on (ws:\/\/\S+)/); if (match) { clearTimeout(timer); done(match[1]) } })
   })
-  const socket = new WebSocket(endpoint); await once(socket, 'open')
+  const socket = new WebSocket(endpoint)
+  await once(socket, 'open')
   t.after(() => socket.terminate())
   let seq = 0; const waiting = new Map<number, any>(); const errors: any[] = []
   socket.on('message', raw => {
@@ -191,28 +200,28 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
     check(document.querySelector('[aria-label="Default quote terms"]').value==='Delivery after approval.','Preference failure cleared input');
     button('Save preferences').click();await wait(50);check(!document.querySelector('[aria-label="Quote preferences"]'),'Preferences did not close after save');
     button('Preference').click();await wait(40);button('Design quote').click();await wait(60);
-    check(document.querySelector('dialog[open]')&&document.querySelector('.quote-paper'),'Quote designer missing');
+    check(document.querySelector('.document-design-page')&&document.querySelector('.quote-paper'),'Quote designer missing');
     const pageSize = document.querySelector('[aria-label="Document page size"]');
     pageSize.value='A5';pageSize.dispatchEvent(new Event('change',{bubbles:true}));await wait(30);
     check(Math.abs(document.querySelector('.quote-paper').getBoundingClientRect().width / .75 - 148*96/25.4)<2,'A5 preview geometry not applied');
     const template=document.querySelector('[aria-label="Design template"]');template.value='professional';template.dispatchEvent(new Event('change',{bubbles:true}));await wait(20);button('Apply template').click();await wait(30);
-    check(document.querySelector('.quote-professional'),'Shared template did not apply');button('Undo').click();await wait(20);check(!document.querySelector('.quote-professional'),'Template replacement cannot be undone');
+    check(document.querySelector('.quote-professional'),'Shared template did not apply');window.designerHistory('z');await wait(20);check(!document.querySelector('.quote-professional'),'Template replacement cannot be undone');
     const restoredPaper=document.querySelector('[aria-label="Document page size"]');restoredPaper.value='A4';restoredPaper.dispatchEvent(new Event('change',{bubbles:true}));await wait(20);
     const tools=document.querySelector('.document-tools');tools.querySelector('details').open=true;
     const sectionTitle=tools.querySelector('input:not([type=checkbox])'),sectionBody=tools.querySelector('textarea');sectionTitle.value='Plant features';sectionTitle.dispatchEvent(new Event('input',{bubbles:true}));sectionBody.value='Carbon filter\\nAutomatic backwash';sectionBody.dispatchEvent(new Event('input',{bubbles:true}));tools.querySelector('input[type=checkbox]').click();await wait(20);button('Add section').click();await wait(30);
     const added=document.querySelector('.quote-paper .section-border');check(added&&added.querySelector('h3').textContent==='Plant features'&&added.textContent.includes('• Automatic backwash'),'Shared custom section not rendered');
-    button('Undo').click();await wait(20);check(!document.querySelector('.quote-paper').textContent.includes('Plant features'),'Custom section undo failed');button('Redo').click();await wait(20);check(document.querySelector('.quote-paper').textContent.includes('Plant features'),'Custom section redo failed');
+    window.designerHistory('z');await wait(20);check(!document.querySelector('.quote-paper').textContent.includes('Plant features'),'Custom section undo failed');window.designerHistory('y');await wait(20);check(document.querySelector('.quote-paper').textContent.includes('Plant features'),'Custom section redo failed');
     document.querySelector('.quote-paper table').closest('section').click();await wait(20);
     fill('Minimum table row height','32');fill('Minimum table header height','12');fill('Table cell padding','2');fill('Table body text size','12');fill('Table header text size','10');fill('Table vertical alignment','middle');fill('Table image width','30');fill('Table image height','20');fill('Table image placement','above');fill('Quote table width','80');
     document.querySelector('[aria-label="Show table product images"]').click();fill('Quote name column width','40');await wait(30);
     const itemTable=document.querySelector('.quote-paper table'),thumb=itemTable.querySelector('.quote-item-image');
     check(Math.abs(thumb.getBoundingClientRect().width / .75 - 30*96/25.4)<2,'Table image width not applied');check(Math.abs(thumb.getBoundingClientRect().height / .75 - 20*96/25.4)<2,'Table image height not applied');
     check(itemTable.querySelector('tbody tr').getBoundingClientRect().height / .75 >= 32*96/25.4-1,'Minimum row height ignored');check(itemTable.classList.contains('images-above')&&getComputedStyle(itemTable.querySelector('td')).verticalAlign==='middle','Table image placement/alignment missing');
-    check(Math.abs(parseFloat(getComputedStyle(itemTable.querySelector('td')).fontSize)-16)<.2,'Table body text size ignored');check(Math.abs(itemTable.getBoundingClientRect().width/itemTable.closest('section').getBoundingClientRect().width-.8)<.01,'Table width ignored');
+    check(Math.abs(parseFloat(getComputedStyle(itemTable.querySelector('td')).fontSize)-16)<.2,'Table body text size ignored');check(Math.abs(itemTable.getBoundingClientRect().width/(document.querySelector('.quote-paper').getBoundingClientRect().width-32*96/25.4*.75)-.8)<.01,'Table width ignored');
     const divider=itemTable.querySelector('[aria-label="Resize Item column"]'),beforeColumn=Number(document.querySelector('[aria-label="Quote name column width"]').value);
     divider.setPointerCapture=()=>{};divider.hasPointerCapture=()=>false;divider.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:9,button:0,clientX:200}));divider.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:9,clientX:230}));divider.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:9}));await wait(20);
-    check(Number(document.querySelector('[aria-label="Quote name column width"]').value)>beforeColumn,'Dragging column divider did not resize');button('Undo').click();await wait(20);check(Math.abs(Number(document.querySelector('[aria-label="Quote name column width"]').value)-beforeColumn)<.2,'Column resize undo did not restore');
-    itemTable.querySelector('[aria-label="Resize Item column"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await wait(20);check(Number(document.querySelector('[aria-label="Quote name column width"]').value)>beforeColumn,'Keyboard column resize failed');button('Undo').click();await wait(20);
+    check(Number(document.querySelector('[aria-label="Quote name column width"]').value)>beforeColumn,'Dragging column divider did not resize');window.designerHistory('z');await wait(20);check(Math.abs(Number(document.querySelector('[aria-label="Quote name column width"]').value)-beforeColumn)<.2,'Column resize undo did not restore');
+    itemTable.querySelector('[aria-label="Resize Item column"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await wait(20);check(Number(document.querySelector('[aria-label="Quote name column width"]').value)>beforeColumn,'Keyboard column resize failed');window.designerHistory('z');await wait(20);
     button('Add header image').click();await wait(20);
     const imageInput=document.querySelector('[aria-label="Upload quote design image"]');
     const canvas=document.createElement('canvas');canvas.width=120;canvas.height=30;const ctx=canvas.getContext('2d');ctx.fillStyle='#f97316';ctx.fillRect(0,0,120,30);
@@ -221,21 +230,21 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
     button('Add footer image').click();await wait(20);const footerInput=document.querySelector('[aria-label="Upload quote design image"]');const footerTransfer=new DataTransfer();footerTransfer.items.add(new File([blob],'footer.png',{type:'image/png'}));footerInput.files=footerTransfer.files;footerInput.dispatchEvent(new Event('change',{bubbles:true}));for(let i=0;i<150&&document.querySelectorAll('.quote-paper img').length!==2;i++)await wait(20);check(document.querySelectorAll('.quote-paper img').length===2,'Footer upload failed '+document.body.textContent);fill('Quote image description','Footer banner');
     button('Add text').click();await wait(20);fill('Quote design text','Custom quote footer');await wait(20);
     check(document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Text did not update');
-    button('Undo').click();await wait(20);check(!document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Design undo failed');button('Redo').click();await wait(20);check(document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Design redo failed');
+    window.designerHistory('z');await wait(20);check(!document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Design undo failed');window.designerHistory('y');await wait(20);check(document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Design redo failed');
     const textRow=[...document.querySelectorAll('[aria-label="Quote design sections"] li')].find(el=>el.textContent.includes('Custom quote footer'));textRow.querySelector('[aria-label$=" up"]').click();await wait(20);
     document.querySelector('[data-section-id="quote-3"]').click();await wait(20);fill('Quote name column heading','Description');await wait(20);check(document.querySelector('.quote-paper th:nth-child(2)').textContent==='Description','Table heading did not update');
     button('Add image').click();await wait(20);check(document.querySelector('[aria-label="Quote image placement"]').value==='absolute','Free image placement missing');fill('Quote image left','30');fill('Quote image top','40');await wait(20);
     const imageId=document.querySelector('[aria-label="Quote design sections"] button[aria-pressed="true"]').getAttribute('aria-label').replace('Select quote section ','');
-    const box=document.querySelector('[data-section-id="'+imageId+'"]');box.setPointerCapture=()=>{};box.hasPointerCapture=()=>false;box.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:22,button:0,clientX:100,clientY:100}));box.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:22,clientX:130,clientY:130}));box.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:22,clientX:130,clientY:130}));await wait(20);
+    const box=document.querySelector('[data-section-id="'+imageId+'"]'),gestureRoot=document.querySelector('.quote-editing-canvas');gestureRoot.setPointerCapture=()=>{};gestureRoot.hasPointerCapture=()=>false;box.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:22,button:0,clientX:100,clientY:100}));box.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:22,clientX:130,clientY:130}));box.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:22,clientX:130,clientY:130}));await wait(20);
     check(Number(document.querySelector('[aria-label="Quote image left"]').value)>30&&Number(document.querySelector('[aria-label="Quote image top"]').value)>40,'Quote image drag did not update position');
     button('Delete section').click();await wait(20);
-    button('Add live field').click();await wait(20);fill('Quote design live field','clientName');await wait(20);check(document.querySelectorAll('.quote-paper .preserve-lines').length>0,'Live field missing');
+    button('Add live field').click();await wait(20);fill('Link to data','clientName');await wait(20);check(document.querySelectorAll('.quote-paper .preserve-lines').length>0,'Live field missing');
     button('Page setup').click();await wait(20);fill('Quote accent colour','#c2410c');await wait(20);button('Save design').click();await wait(70);
-    check(!document.querySelector('dialog[open]')&&!document.querySelector('[aria-label="Quote preferences"]'),'Design not saved');
+    check(document.querySelector('.document-design-page')&&document.querySelector('.inspector-save-state').textContent==='All changes saved','Design not saved in place: '+JSON.stringify({status:document.querySelector('.inspector-save-state')?.textContent,errors:[...document.querySelectorAll('[role="alert"]')].map(e=>e.textContent)}));document.querySelector('[aria-label="Back from quote designer"]').click();await wait(80);
     button('Preference').click();await wait(40);button('Design quote').click();await wait(50);
     check(document.querySelectorAll('.quote-paper img').length===2&&document.querySelector('.quote-paper').textContent.includes('Custom quote footer'),'Saved design did not reload '+JSON.stringify({images:document.querySelectorAll('.quote-paper img').length,text:document.querySelector('.quote-paper')?.textContent,sections:window.quoteFixture.calls.filter(c=>c.url==='/api/quotes/preferences'&&c.method==='PUT').at(-1)?.body.documentDesign.sections.map(s=>({kind:s.kind,text:s.text,image:!!s.image}))}));
     check(document.querySelector('.quote-paper').style.getPropertyValue('--quote-accent')==='#c2410c','Design style did not persist');
-    document.querySelector('dialog[open]').dispatchEvent(new Event('cancel',{cancelable:true}));await wait(20);check(!document.querySelector('dialog[open]')&&document.querySelector('[aria-label="Quote preferences"]'),'Closing designer lost preference drawer');button('Cancel').click();await wait(30);
+    document.querySelector('[aria-label="Back from quote designer"]').click();await wait(60);button('Preference').click();await wait(40);check(!document.querySelector('.document-design-page')&&document.querySelector('[aria-label="Quote preferences"]'),'Returning from designer lost preferences');button('Cancel').click();await wait(30);
 
     button('Add quote').click();await wait(100);
     check(location.pathname==='/erp/quotes/add'&&new URLSearchParams(location.search).get('entryCompany')==='company','Add quote did not navigate with company');
@@ -339,7 +348,7 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
     const check=(ok,message)=>{if(!ok)throw Error(message)};
     await window.quoteFixture.router.push('/erp/sales-orders?entryCompany=company');await wait(100);check(button('Add sales order'),'Sales orders table missing');
     button('Preference').click();await wait(60);check(!document.querySelector('[aria-label="Allow customer quote approval"]'),'Quote approval shown for sales orders');button('Design sales order').click();await wait(60);
-    check(document.querySelector('.quote-paper h1').textContent==='SALES ORDER','Wrong sales order design heading');button('Add text').click();await wait(20);fill('Quote design text','Order design footer');await wait(20);button('Save design').click();await wait(60);
+    check(document.querySelector('.quote-paper h1').textContent==='SALES ORDER','Wrong sales order design heading');button('Add text').click();await wait(20);fill('Quote design text','Order design footer');await wait(20);button('Save design').click();await wait(60);document.querySelector('[aria-label="Back from sales order designer"]').click();await wait(60);
     button('Add sales order').click();await wait(100);check(location.pathname==='/erp/sales-orders/add','Sales order add URL missing');
     check([...document.querySelector('[aria-label="Sales order status"]').options].map(o=>o.value).join(',')==='DRAFT,CONFIRMED,CLOSED,CANCELLED','Wrong sales order statuses');
     fill('Order date','2026-10-29');fill('Expected shipment date','2026-11-29');fill('Sales order status','CONFIRMED');fill('Search customer','Customer');await wait(350);button('Customer 1234567890').click();await wait(20);
@@ -358,14 +367,101 @@ test('Chrome: quote and sales order pages retain drafts, preferences, saves, fil
   assert.deepEqual(errors, [])
   assert.ok(await evaluate(`document.querySelectorAll('button').forEach(b=>{if(b.textContent.trim()==='Add quote')b.click()});await new Promise(r=>setTimeout(r,100));return location.pathname==='/erp/quotes/add'&&!!document.querySelector('[aria-label="Quote date"]')&&document.querySelector('[aria-label="Product search field"]').value==='barcode'`))
   assert.ok(await evaluate(`localStorage.setItem('erp:quote-product-search-field:v1','invalid');await window.quoteFixture.router.push('/erp/quotes');await new Promise(r=>setTimeout(r,100));document.querySelectorAll('button').forEach(b=>{if(b.textContent.trim()==='Add quote')b.click()});await new Promise(r=>setTimeout(r,100));return document.querySelector('[aria-label="Product search field"]').value==='all'`))
-  assert.ok(await evaluate(`await window.quoteFixture.router.push('/erp/quotes');await new Promise(r=>setTimeout(r,100));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Preference').click();await new Promise(r=>setTimeout(r,50));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Design quote').click();await new Promise(r=>setTimeout(r,60));return document.querySelector('dialog[open]').scrollWidth<=window.innerWidth+1&&document.querySelector('.design-properties').getBoundingClientRect().width<=window.innerWidth`))
-  await evaluate(`document.querySelector('[aria-label="Close quote designer"]').click();await new Promise(r=>setTimeout(r,20));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Cancel').click();await window.quoteFixture.router.push('/erp/quotes/add?entryCompany=company');await new Promise(r=>setTimeout(r,100));const input=document.querySelector('[aria-label="Item 1 name"]');const original=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new DOMException('Quota full','QuotaExceededError')};input.value='Draft without storage';input.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,20));let confirms=0;window.confirm=()=>{confirms++;return false};[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Back to quotes').click();await new Promise(r=>setTimeout(r,40));const guarded=confirms===1&&location.pathname==='/erp/quotes/add'&&[...document.querySelectorAll('[role="alert"]')].some(el=>el.textContent.includes('Could not keep the local draft'));Storage.prototype.setItem=original;window.confirm=()=>true;if(!guarded)throw Error('Storage failure silently discarded the quote');input.value='Restore after refresh';input.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,20));return true`)
+  assert.ok(await evaluate(`await window.quoteFixture.router.push('/erp/quotes');await new Promise(r=>setTimeout(r,100));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Preference').click();await new Promise(r=>setTimeout(r,50));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Design quote').click();await new Promise(r=>setTimeout(r,60));return document.querySelector('.document-design-page').scrollWidth<=window.innerWidth+1&&document.querySelector('.design-properties').getBoundingClientRect().width<=window.innerWidth`))
+  // Exercise the canvas with real browser pointer capture at two zoom levels.
+  await pageCommand('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
+  await evaluate(`
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    const label=name=>document.querySelector('[aria-label="'+name+'"]');
+    const set=async(name,value)=>{const input=label(name);if(!input)throw Error('Missing '+name);input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));await wait(30)};
+    if(label('Toggle layers panel').getAttribute('aria-pressed')!=='true')label('Toggle layers panel').click();
+    label('Add shape layer').click();await wait(40);
+    await set('Element X',40);await set('Element Y',150);await set('Element width',40);await set('Element height',20);
+    window.canvasShapeId=document.querySelector('.layer-select[aria-pressed="true"]').getAttribute('aria-label').replace('Select quote section ','');
+    label('Element fill').value='#fef3c7';label('Element fill').dispatchEvent(new Event('input',{bubbles:true}));
+    label('Add text layer').click();await wait(40);
+    label('Quote design text').value='Editable canvas text';label('Quote design text').dispatchEvent(new Event('input',{bubbles:true}));await wait(30);
+    await set('Element X',30);await set('Element Y',100);await set('Element width',75);await set('Element height',15);
+    window.canvasTextId=document.querySelector('.layer-select[aria-pressed="true"]').getAttribute('aria-label').replace('Select quote section ','');
+    if(label('Snap to elements').getAttribute('aria-pressed')==='true')label('Snap to elements').click();
+    document.querySelector('.canvas-scroll').scrollTop=0;
+    window.canvasBox=()=>{const e=document.querySelector('[data-section-id="'+window.canvasTextId+'"]'),r=e.getBoundingClientRect();return {x:parseFloat(e.style.left),y:parseFloat(e.style.top),width:parseFloat(e.style.width),height:parseFloat(e.style.minHeight),screenX:r.x+15,screenY:r.y+r.height/2,scale:document.querySelector('.quote-paper').getBoundingClientRect().width/210}};
+    return true;
+  `)
+  const beforeMove = await evaluate('return window.canvasBox()')
+  const mouse = (type: string, x: number, y: number, extra: any = {}) => pageCommand('Input.dispatchMouseEvent', { type, x, y, ...extra })
+  await mouse('mousePressed', beforeMove.screenX, beforeMove.screenY, { button: 'left', clickCount: 1 })
+  await mouse('mouseMoved', beforeMove.screenX + 28, beforeMove.screenY + 20, { button: 'left', buttons: 1 })
+  await mouse('mouseReleased', beforeMove.screenX + 28, beforeMove.screenY + 20, { button: 'left', clickCount: 1 })
+  const afterMove = await evaluate('await new Promise(r=>setTimeout(r,40));return window.canvasBox()')
+  assert.ok(Math.abs(afterMove.x - beforeMove.x - 28 / beforeMove.scale) < .2, 'Real pointer move should use the current canvas zoom')
+  assert.ok(Math.abs(afterMove.y - beforeMove.y - 20 / beforeMove.scale) < .2)
+  const resizePoint = await evaluate(`const r=document.querySelector('[aria-label="Resize selection bottom right"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}`)
+  await mouse('mousePressed', resizePoint.x, resizePoint.y, { button: 'left', clickCount: 1 })
+  await mouse('mouseMoved', resizePoint.x + 30, resizePoint.y + 20, { button: 'left', buttons: 1 })
+  await mouse('mouseReleased', resizePoint.x + 30, resizePoint.y + 20, { button: 'left', clickCount: 1 })
+  const afterResize = await evaluate('await new Promise(r=>setTimeout(r,40));return window.canvasBox()')
+  assert.ok(afterResize.width > afterMove.width + 9 && afterResize.height > afterMove.height + 6, 'Resize handles should change the printable frame')
+  await evaluate(`const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);window.designerHistory('z');await new Promise(r=>setTimeout(r,30));return true`)
+  assert.equal((await evaluate('return window.canvasBox()')).width, afterMove.width, 'One gesture must be one undo step')
+  await evaluate(`const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);window.designerHistory('y');await new Promise(r=>setTimeout(r,30));return true`)
+  const beforeCancel = await evaluate('return window.canvasBox()')
+  await mouse('mousePressed', beforeCancel.screenX, beforeCancel.screenY, { button: 'left', clickCount: 1 })
+  await mouse('mouseMoved', beforeCancel.screenX + 35, beforeCancel.screenY + 15, { button: 'left', buttons: 1 })
+  await pageCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' })
+  await mouse('mouseReleased', beforeCancel.screenX + 35, beforeCancel.screenY + 15, { button: 'left', clickCount: 1 })
+  const afterCancel = await evaluate('await new Promise(r=>setTimeout(r,30));return window.canvasBox()')
+  assert.equal(afterCancel.x, beforeCancel.x, 'Escape must restore a cancelled drag')
+  assert.equal(afterCancel.y, beforeCancel.y)
+  assert.ok(await evaluate(`
+    const wait=ms=>new Promise(r=>setTimeout(r,ms)),label=name=>document.querySelector('[aria-label="'+name+'"]');
+    const key=(key,options={})=>document.querySelector('.quote-editing-canvas').dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,...options}));
+    const check=(ok,message)=>{if(!ok)throw Error(message)};
+    const shape=()=>document.querySelector('[data-section-id="'+window.canvasShapeId+'"]'),text=()=>document.querySelector('[data-section-id="'+window.canvasTextId+'"]');
+    label('Select quote section '+window.canvasShapeId).dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}));await wait(30);
+    check(document.querySelectorAll('.layer-select[aria-pressed="true"]').length===2,'Shift selection failed');
+    label('Group selection').click();await wait(30);label('Select quote section '+window.canvasTextId).click();await wait(30);
+    check(document.querySelectorAll('.layer-select[aria-pressed="true"]').length===2,'Grouped layers did not select together');
+    const x1=parseFloat(text().style.left),x2=parseFloat(shape().style.left);key('ArrowRight');await wait(30);
+    check(Math.abs(parseFloat(text().style.left)-x1-.5)<.1&&Math.abs(parseFloat(shape().style.left)-x2-.5)<.1,'Grouped keyboard nudge failed');
+    label('Align top').click();await wait(30);check(Math.abs(parseFloat(text().style.top)-parseFloat(shape().style.top))<.1,'Multi-layer alignment failed');
+    const count=document.querySelectorAll('[data-section-id]').length;
+    key('d',{ctrlKey:true});await wait(30);check(document.querySelectorAll('[data-section-id]').length===count+2,'Group duplicate failed');
+    key('Delete');await wait(30);check(document.querySelectorAll('[data-section-id]').length===count,'Delete selection failed');
+    label('Select quote section '+window.canvasTextId).click();await wait(30);key('c',{ctrlKey:true});key('v',{ctrlKey:true});await wait(30);
+    check(document.querySelectorAll('[data-section-id]').length===count+2,'Copy/paste layers failed');key('Delete');await wait(30);
+    label('Select quote section '+window.canvasTextId).click();await wait(30);key('l',{ctrlKey:true,shiftKey:true});await wait(30);
+    const lockedX=parseFloat(text().style.left);key('ArrowRight');key('Delete');await wait(30);
+    check(text()&&parseFloat(text().style.left)===lockedX,'Locked layers changed');key('l',{ctrlKey:true,shiftKey:true});await wait(30);
+    key('g',{ctrlKey:true,shiftKey:true});await wait(30);label('Select quote section '+window.canvasTextId).click();await wait(30);
+    text().dispatchEvent(new MouseEvent('dblclick',{bubbles:true,detail:2}));await wait(30);
+    const inline=label('Edit text on canvas');check(inline,'Double-click did not open text editing');inline.value='Changed directly on canvas';inline.dispatchEvent(new Event('input',{bubbles:true}));inline.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true}));await wait(30);
+    check(text().textContent.includes('Changed directly on canvas'),'Inline edit was not committed');
+    label('Element opacity').value='70';label('Element opacity').dispatchEvent(new Event('change',{bubbles:true}));await wait(30);
+    check(Math.abs(Number(getComputedStyle(text()).opacity)-.7)<.01,'Opacity missing from rendered document');
+    key('Delete');await wait(30);document.querySelector('[data-section-id="quote-3"]').click();await wait(30);key('Delete');await wait(30);
+    check(document.querySelector('[data-section-id="quote-3"]'),'Required table was deleted');
+    document.querySelector('[data-section-id="quote-4"]').click();await wait(30);key('d',{ctrlKey:true});await wait(30);
+    check(document.querySelectorAll('[data-section-id="quote-4"]').length===1&&document.querySelectorAll('[data-section-id]').length===count-1,'Required totals was copied');
+    label('Select quote section '+window.canvasShapeId).click();await wait(30);
+    label('Preview zoom').value='150';label('Preview zoom').dispatchEvent(new Event('change',{bubbles:true}));await wait(30);
+    document.querySelector('.canvas-scroll').scrollTop=500;document.querySelector('.canvas-scroll').scrollLeft=0;
+    return true;
+  `))
+  const zoomBefore = await evaluate(`const e=document.querySelector('[data-section-id="'+window.canvasShapeId+'"]');e.scrollIntoView({block:'center',inline:'center'});await new Promise(r=>setTimeout(r,30));const r=e.getBoundingClientRect();return {x:parseFloat(e.style.left),y:parseFloat(e.style.top),screenX:r.x+20,screenY:r.y+r.height/2,scale:document.querySelector('.quote-paper').getBoundingClientRect().width/210}`)
+  await mouse('mousePressed', zoomBefore.screenX, zoomBefore.screenY, { button: 'left', clickCount: 1 })
+  await mouse('mouseMoved', zoomBefore.screenX + 40, zoomBefore.screenY, { button: 'left', buttons: 1 })
+  await mouse('mouseReleased', zoomBefore.screenX + 40, zoomBefore.screenY, { button: 'left', clickCount: 1 })
+  const zoomAfter = await evaluate(`await new Promise(r=>setTimeout(r,30));return parseFloat(document.querySelector('[data-section-id="'+window.canvasShapeId+'"] ').style.left)`)
+  assert.ok(Math.abs(zoomAfter - zoomBefore.x - 40 / zoomBefore.scale) < .2, 'Movement must stay accurate at 150% zoom')
+  await evaluate(`document.querySelector('[aria-label="Preview zoom"]').value='75';document.querySelector('[aria-label="Preview zoom"]').dispatchEvent(new Event('change',{bubbles:true}));return true`)
+  await evaluate(`document.querySelector('[aria-label="Back from quote designer"]').click();await new Promise(r=>setTimeout(r,60));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Preference').click();await new Promise(r=>setTimeout(r,40));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Cancel').click();await window.quoteFixture.router.push('/erp/quotes/add?entryCompany=company');await new Promise(r=>setTimeout(r,100));const input=document.querySelector('[aria-label="Item 1 name"]');const original=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new DOMException('Quota full','QuotaExceededError')};input.value='Draft without storage';input.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,20));let confirms=0;window.confirm=()=>{confirms++;return false};[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Back to quotes').click();await new Promise(r=>setTimeout(r,40));const guarded=confirms===1&&location.pathname==='/erp/quotes/add'&&[...document.querySelectorAll('[role="alert"]')].some(el=>el.textContent.includes('Could not keep the local draft'));Storage.prototype.setItem=original;window.confirm=()=>true;if(!guarded)throw Error('Storage failure silently discarded the quote');input.value='Restore after refresh';input.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,20));return true`)
   await pageCommand('Page.reload')
   assert.ok(await evaluate(`for(let i=0;i<100&&!document.querySelector('[aria-label="Search quotes"]');i++)await new Promise(r=>setTimeout(r,50));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Add quote').click();await new Promise(r=>setTimeout(r,100));return document.querySelector('[aria-label="Item 1 name"]').value==='Restore after refresh'&&document.querySelector('[aria-label="Quote status"]').value==='SENT'`))
   if (process.env.QUOTE_DESIGN_SCREENSHOT) await evaluate(`await window.quoteFixture.router.push('/erp/quotes');await new Promise(r=>setTimeout(r,80));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Preference').click();await new Promise(r=>setTimeout(r,50));[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Design quote').click();await new Promise(r=>setTimeout(r,40));return true`)
   if (process.env.QUOTE_DESIGN_SCREENSHOT) {
     await pageCommand('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
-    if (process.env.QUOTE_TABLE_SCREENSHOT) await evaluate(`document.querySelector('.quote-paper table').closest('section').click();await new Promise(r=>setTimeout(r,80));return true`)
+    if (process.env.QUOTE_TABLE_SCREENSHOT) await evaluate(`if(document.querySelector('[aria-label="Toggle layers panel"]').getAttribute('aria-pressed')!=='true')document.querySelector('[aria-label="Toggle layers panel"]').click();document.querySelector('.quote-paper table').closest('section').click();await new Promise(r=>setTimeout(r,80));return true`)
     await evaluate(`await new Promise(r=>setTimeout(r,100));return true`)
     const screenshot = await pageCommand('Page.captureScreenshot', { format: 'png' })
     writeFileSync(resolve(cache, 'quote-designer.png'), Buffer.from(screenshot.data, 'base64'))

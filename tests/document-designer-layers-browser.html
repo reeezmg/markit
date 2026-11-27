@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Nested print layers checks</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;color:#333}button,input,select,textarea{font:inherit}button{cursor:pointer;background:transparent;border:0}h1,h2,h3,p{margin:0}button:disabled{cursor:default}.fixture-button{border:1px solid #ddd;border-radius:5px;padding:7px 12px;font-size:12px;background:white}.fixture-button.primary{background:#f97316;color:white;border-color:#f97316}.print-fixture{position:absolute;left:-10000px;top:0}#result{position:fixed;bottom:0;left:0;z-index:30000;background:white;font-size:10px;max-width:95vw}
+</style></head><body><div id="app"></div><pre id="result">Running</pre><script type="module">
+import * as Vue from 'vue'
+import DesignEditor from '../components/Quotes/DesignEditor.vue'
+import QuoteDocument from '../components/Quotes/Document.vue'
+import { quoteDesignTemplate, normalizeQuoteDesign } from '../utils/quote-design'
+Object.assign(globalThis,Vue)
+const logo=document.createElement('canvas');logo.width=80;logo.height=80;const ctx=logo.getContext('2d');ctx.fillStyle='#0d99ff';ctx.fillRect(0,0,80,80);ctx.fillStyle='white';ctx.font='bold 44px Arial';ctx.fillText('B',24,57)
+const company=Vue.ref({companyName:'Blue Nest',logo:logo.toDataURL('image/png'),companyPhone:'+91 98765 43210',companyEmail:'hello@bluenest.example',address:'Kochi, Kerala',currency:'INR'})
+const quote=Vue.ref({quoteNumber:'QT-00001',quoteDate:'2026-10-29',expiryDate:'2026-11-29',clientName:'Sample Customer',clientPhone:'9876543210',referenceNumber:'Project reference',salesperson:'Alex',subject:'Your quotation',notes:'Thank you for your enquiry.',termsAndConditions:'Prices are valid until the date shown.',paymentTerms:'Due within 30 days',deliveryEstimate:'Within 7 working days',discount:0,discountType:'amount',adjustment:0,subTotal:2360,total:2360,items:[{id:'sample',name:'Sample product',description:'Product description',size:'M',quantity:2,unit:'pcs',rate:1180,tax:18,discount:0,amount:2360}]})
+const design=Vue.ref(quoteDesignTemplate('professional')),renderKey=Vue.ref(0),savedDesign=Vue.ref(JSON.stringify(design.value));let saved
+const app=Vue.createApp({render:()=>Vue.h('div',[Vue.h(DesignEditor,{key:renderKey.value,modelValue:design.value,company:company.value,busy:false,savedDesign:savedDesign.value,'onUpdate:modelValue':v=>design.value=v,onSave:()=>{saved=normalizeQuoteDesign(design.value);savedDesign.value=JSON.stringify(saved)}}),Vue.h('div',{class:'print-fixture'},[Vue.h(QuoteDocument,{design:design.value,company:company.value,quote:quote.value})])])})
+app.component('UButton',{props:['disabled','loading','color'],setup:(p,{attrs,slots})=>()=>Vue.h('button',{...attrs,type:'button',disabled:p.disabled||p.loading,class:['fixture-button',!p.color?'primary':'']},slots.default?.())});app.mount('#app')
+const wait=()=>new Promise(resolve=>setTimeout(resolve,45)),check=(ok,message)=>{if(!ok)throw Error(message)}
+const label=name=>document.querySelector(`[aria-label="${name}"]`),button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text)
+const canvas=()=>document.querySelector('.quote-editing-canvas'),paper=()=>canvas().querySelector('.quote-paper'),print=()=>document.querySelector('.print-fixture .quote-paper')
+const element=(id,root=paper())=>root.querySelector(`[data-layer-id="${id}"]`),scale=()=>paper().getBoundingClientRect().width/210
+const rect=id=>{const r=element(id).getBoundingClientRect(),p=paper().getBoundingClientRect();return {x:(r.left-p.left)/scale(),y:(r.top-p.top)/scale(),w:r.width/scale(),h:r.height/scale()}}
+const edit=(name,value,event='change')=>{const e=label(name);check(e,'Missing '+name);e.value=value;e.dispatchEvent(new Event(event,{bubbles:true}))}
+const select=async id=>{label('Select '+(id.includes('::')?'layer ':'quote section ')+id).click();await wait()}
+const history=async key=>{document.body.dispatchEvent(new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true,cancelable:true}));await wait()}
+function drag(target,dx,dy,{cancel=false,ctrl=true,handle=false}={}){
+  const root=canvas(),r=target.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2
+  root.setPointerCapture=()=>{};root.hasPointerCapture=()=>false
+  target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:71,button:0,clientX:x,clientY:y,ctrlKey:ctrl}))
+  root.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:71,clientX:x+dx/2,clientY:y+dy/2,altKey:true}))
+  root.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:71,clientX:x+dx,clientY:y+dy,altKey:true}))
+  root.dispatchEvent(new PointerEvent(cancel?'pointercancel':'pointerup',{bubbles:true,pointerId:71}))
+}
+function parity(id){const a=element(id).getBoundingClientRect(),b=element(id,print()).getBoundingClientRect(),pa=paper().getBoundingClientRect(),pb=print().getBoundingClientRect(),ps=pb.width/210;check(Math.abs((a.x-pa.x)/scale()-(b.x-pb.x)/ps)<.6&&Math.abs(a.width/scale()-b.width/ps)<.6,'Canvas/print geometry differs for '+id)}
+try{
+  await wait();await wait()
+  const header=design.value.sections[0].id,name=header+'::company-name',logoId=header+'::logo',brand=header+'::brand',title=header+'::document-title',customer=design.value.sections.find(s=>s.kind==='customer').id+'::customer-box'
+  if(new URLSearchParams(location.search).has('preview')){await select(name);document.getElementById('result').textContent='PREVIEW READY'}
+  else{
+    check(label('Select layer '+logoId)&&label('Select layer '+name),'Header does not have nested image/text layers')
+    check(!button('Content')&&!document.querySelector('.design-tabs'),'Old inspector tabs remain')
+    await select(name);check(document.querySelector('.live-value')?.textContent==='Blue Nest'&&label('Element font size')&&!label('Upload nested layer image'),'Text inspector is not contextual')
+    const start=rect(name),logoStart=rect(logoId),headerStart=rect(header),titleStart=rect(title)
+    drag(element(name),30,15);await wait();check(Math.abs(rect(name).x-start.x-30/scale())<.6,'Child drag accumulated incorrect movement');check(Math.abs(rect(logoId).x-logoStart.x)<.3&&Math.abs(rect(title).x-titleStart.x)<.3&&Math.abs(rect(header).x-headerStart.x)<.3,'Moving text displaced its sibling or parent')
+    parity(name);await history('z');check(Math.abs(rect(name).x-start.x)<.5,'Child move did not undo in one step');await history('y');check(Math.abs(rect(name).x-start.x-30/scale())<.6,'Child move redo failed')
+    const beforeCancel=JSON.stringify(design.value);drag(element(name),24,8,{cancel:true});await wait();check(JSON.stringify(design.value)===beforeCancel,'Cancelled child gesture changed the document')
+    await select(logoId);check(label('Upload nested layer image')&&!label('Element font size'),'Image inspector shows text controls')
+    const oldLogo=rect(logoId),nameBeforeResize=rect(name);drag(label('Resize selection right'),25,0,{handle:true});await wait();check(rect(logoId).w>oldLogo.w+8,'Nested logo resize failed');check(Math.abs(rect(name).x-nameBeforeResize.x)<.4,'Resizing the logo displaced sibling text');parity(logoId)
+    edit('Element image fit','cover');await wait();check(getComputedStyle(element(logoId)).objectFit==='cover','Image fill setting did not render')
+    await select(name);label('Inspector align right').click();await wait();check(Math.abs(Number(label('Element X').value))<.8,'Child alignment did not use the parent frame')
+    edit('Element font size','28');edit('Element text color','#dc2626','input');await wait();check(Math.abs(parseFloat(getComputedStyle(element(name)).fontSize)-28)<.1&&getComputedStyle(element(name)).color==='rgb(220, 38, 38)','Nested typography did not render')
+    await select(header);const childBefore=rect(name);drag(element(header),0,24,{ctrl:false});await wait();check(Math.abs(rect(name).y-childBefore.y-24/scale())<.6,'Moving parent did not move its children')
+    await select(brand);label('Lock selected layer').click();await wait();await select(name);check(label('Element X').disabled||label('Element X').closest('fieldset').disabled,'Parent lock is not inherited');const locked=JSON.stringify(design.value);drag(element(name),20,0);await wait();check(JSON.stringify(design.value)===locked,'Dragging a locked descendant edited it')
+    label('Unlock layer '+brand).click();await wait();await select(brand);label('Add frame inside selection').click();await wait();const frame=design.value.sections[0].elements.find(e=>e.kind==='frame'),frameId=header+'::'+frame.key
+    label('Add text inside selection').click();await wait();edit('Nested layer text','Nested custom text','input');await wait();const custom=design.value.sections[0].elements.find(e=>e.kind==='text'&&e.parent===frame.key),customId=header+'::'+custom.key
+    check(element(customId).textContent==='Nested custom text'&&element(frameId).contains(element(customId)),'Custom layers are not rendered inside their frame')
+    await select(frameId);const customBefore=rect(customId);drag(element(frameId),18,9);await wait();check(Math.abs(rect(customId).x-customBefore.x-18/scale())<.6,'Nested frame did not carry its child')
+    await select(customId);label('Lock selected layer').click();await wait();await select(frameId)
+    label('Duplicate selection').click();await wait();const copies=design.value.sections[0].elements.filter(e=>e.kind==='text'&&e.text==='Nested custom text');check(copies.length===2&&copies[0].parent!==copies[1].parent&&copies[1].locked,'Nested frame duplicate lost the child hierarchy or child lock')
+    await history('z');check(design.value.sections[0].elements.filter(e=>e.kind==='text'&&e.text==='Nested custom text').length===1,'Frame duplicate undo failed')
+    label('Unlock layer '+customId).click();await wait();await select(customId);edit('Element rotation','25');await wait();parity(customId)
+    await select(frameId);edit('Element rotation','30');await wait();await select(customId);const rotated=rect(customId);drag(element(customId),20,0);await wait();check(Math.abs(rect(customId).x-rotated.x-20/scale())<.8,'Child drag inside a rotated frame was inaccurate')
+    const beforeDrop=rect(customId),sourceRow=document.querySelector(`[data-layer-node="${customId}"] > .layer-row`),targetRow=document.querySelector(`[data-layer-node="${header}::document-info"] > .layer-row`),dataTransfer=new DataTransfer();sourceRow.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer}));targetRow.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer}));await wait();check(element(header+'::document-info').contains(element(customId))&&Math.abs(rect(customId).x-beforeDrop.x)<.6&&Math.abs(rect(customId).y-beforeDrop.y)<.6,'Reparenting changed the child visual position');parity(customId)
+    label('Preview zoom').value='150';label('Preview zoom').dispatchEvent(new Event('change',{bubbles:true}));await wait();const zoomed=rect(name);drag(element(name),30,0);await wait();check(Math.abs(rect(name).x-zoomed.x-30/scale())<.7,'Nested drag is inaccurate at 150% zoom');parity(name)
+    await select(customer);edit('Element fill','#dbeafe','input');await wait();check(getComputedStyle(element(customer)).backgroundColor==='rgb(219, 234, 254)','Customer background is not individually editable')
+    const itemSection=design.value.sections.find(s=>s.kind==='items').id;await select(itemSection+'::item-name');edit('Element font size','16');await wait();quote.value={...quote.value,items:[...quote.value.items,{...quote.value.items[0],id:'second',name:'Second product'}]};await wait();check([...print().querySelectorAll(`[data-layer-id="${itemSection}::item-name"]`)].every(e=>parseFloat(getComputedStyle(e).fontSize)===16),'Row-template styling did not apply to every product')
+    await select(itemSection+'::column-value-amount');check(document.querySelector('.live-chip')&&!label('Nested layer text'),'Calculated table values can be replaced as static text');label('Delete selection').click();await wait();check(element(itemSection+'::column-value-amount'),'Required row amount was hidden')
+    button('Save design').click();await wait();check(saved&&saved.sections[0].elements.some(e=>e.key==='company-name')&&document.querySelector('.inspector-save-state').textContent==='All changes saved','Nested edits did not save cleanly')
+    design.value=JSON.parse(JSON.stringify(saved));renderKey.value++;await wait();await wait();company.value={...company.value,companyName:'Updated company'};quote.value={...quote.value,clientName:'Another customer'};await wait();check(element(name).textContent==='Updated company'&&print().textContent.includes('Another customer'),'Live document values were frozen by design edits');parity(name)
+    document.getElementById('result').textContent='ALL PASSED: nested tree; contextual inspector; independent child movement/resize; sibling stability; undo/redo/cancel; parent movement/locks; custom nested frames/duplication; rotated parents; 150% zoom; background edit; validated save/reload; live data; print parity'
+  }
+}catch(error){document.getElementById('result').textContent='FAILED: '+error.stack}
+</script></body></html>

@@ -22,6 +22,24 @@ Verify with `npm run test:crm`, `npm run test:crm:mobile` and the read-only
 test adapters until installation is authorized. Real provider delivery remains a
 separate email/WhatsApp onboarding check.
 
+### Removing CRM business accounts
+
+The account-free code works with the old physical account columns still present.
+Deploy it before separately authorizing the locally prepared
+`20261123190000_remove_crm_business_accounts` migration. This drops the CRM account
+table and its three association columns, and cleans account scoring/segment filters.
+It preserves client identities, deals, tasks and historical audits. Refresh the
+read-only backup with `node --import tsx scripts/backup-crm-business-accounts.ts`
+from Storetools before application, retain the ignored snapshot, and inspect inbound
+constraints. No schema application is performed by that script. Do not replay the
+historical CRM create-table migration on an installed database or use a broad push.
+After application verify the old table/columns are absent, CRM readiness succeeds,
+and client/deal/activity counts remain unchanged. The targeted removal was separately
+authorized and applied on 23 November 2026 using
+`node --import tsx scripts/apply-remove-crm-business-accounts.ts --apply`; locked
+backup and record fingerprints passed. This runner previews without `--apply` and
+does not register Prisma migration history. Do not reapply historical migrations. See `docs/ARCH-crm.md`.
+
 ## Existing storefront email marketing
 
 The older email prerequisites below need their own separate database authorization.

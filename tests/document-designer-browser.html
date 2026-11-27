@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Document designer canvas checks</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;color:#0f172a}button,input,select,textarea{font:inherit}button{cursor:pointer;background:transparent;border:0}h1,h2,h3,p{margin:0}button:disabled{cursor:default}.fixture-button{border:1px solid #cbd5e1;border-radius:6px;padding:7px 12px;font-size:12px;background:white}.fixture-button.primary{background:#f97316;color:white;border-color:#f97316}.print-fixture{position:absolute;left:-10000px;top:0}#result{position:fixed;bottom:0;left:0;z-index:30000;background:#fff;font-size:10px;max-width:90vw}
+</style></head><body><div id="app"></div><pre id="result">Running</pre><script type="module">
+import * as Vue from 'vue'
+import DesignEditor from '../components/Quotes/DesignEditor.vue'
+import QuoteDocument from '../components/Quotes/Document.vue'
+import { quoteDesignTemplate, normalizeQuoteDesign } from '../utils/quote-design'
+Object.assign(window, { ref: Vue.ref, computed: Vue.computed, watch: Vue.watch, onMounted: Vue.onMounted, onBeforeUnmount: Vue.onBeforeUnmount })
+const design = Vue.ref(quoteDesignTemplate('professional'))
+const company = { companyName: 'Blue Nest', companyPhone: '+91 98765 43210', companyEmail: 'hello@bluenest.example', address: 'Kochi, Kerala' }
+const quote = { quoteNumber:'QT-00001', quoteDate:'2026-10-29', expiryDate:'2026-11-29', clientName:'Sample Customer', clientPhone:'9876543210', referenceNumber:'Project reference', salesperson:'Alex', subject:'Your quotation', notes:'Thank you for your enquiry.', termsAndConditions:'Prices are valid until the date shown.', paymentTerms:'Due within 30 days', deliveryEstimate:'Within 7 working days', discount:0, discountType:'amount', adjustment:0, subTotal:2360, total:2360, items:[{id:'sample',name:'Sample product',description:'Product description',size:'M',quantity:2,unit:'pcs',rate:1180,tax:18,discount:0,amount:2360}] }
+let saved
+const app = Vue.createApp({ render: () => Vue.h('div', [Vue.h(DesignEditor, { modelValue:design.value, company, savedDesign:JSON.stringify(quoteDesignTemplate('professional')), busy:false,
+  'onUpdate:modelValue': value => { design.value=value }, onSave:()=>{saved=normalizeQuoteDesign(design.value)} }),
+  Vue.h('div',{class:'print-fixture'},[Vue.h(QuoteDocument,{design:design.value,company,quote})])]) })
+app.component('UButton', { props:['disabled','loading','color'], setup:(props,{attrs,slots})=>()=>Vue.h('button',{...attrs,type:'button',disabled:props.disabled||props.loading,class:['fixture-button',!props.color?'primary':'']},slots.default?.()) })
+app.mount('#app')
+const wait = () => new Promise(resolve => setTimeout(resolve,30))
+const check = (ok,message) => { if(!ok)throw Error(message) }
+const label = name => document.querySelector(`[aria-label="${name}"]`)
+const editable = () => document.querySelector('.quote-editing-canvas .quote-paper')
+const printed = () => document.querySelector('.print-fixture .quote-paper')
+const section = (paper,id) => paper.querySelector(`[data-section-id="${id}"]`)
+const mm = paper => paper.getBoundingClientRect().width/210
+function gesture(element,dx,dy,cancel=false) {
+  const root=document.querySelector('.quote-editing-canvas'),rect=element.getBoundingClientRect()
+  root.setPointerCapture=()=>{};root.hasPointerCapture=()=>false
+  element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:55,button:0,clientX:rect.x+10,clientY:rect.y+10}))
+  root.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:55,clientX:rect.x+10+dx,clientY:rect.y+10+dy,altKey:true}))
+  root.dispatchEvent(new PointerEvent(cancel?'pointercancel':'pointerup',{bubbles:true,pointerId:55}))
+}
+try {
+  await wait();await wait()
+  if(new URLSearchParams(location.search).has('preview')) {
+    label('Select quote section quote-0').click();await wait()
+    document.getElementById('result').textContent='PREVIEW READY'
+  } else {
+    const table=design.value.sections.find(s=>s.kind==='items'),totals=design.value.sections.find(s=>s.kind==='totals'),customer=design.value.sections.find(s=>s.kind==='customer')
+    const field=name=>document.querySelector(`[aria-label="${name}"]`)
+    table.width=80;await wait()
+    // The parent keeps an independent draft, as in the real preference drawer.
+    section(editable(),table.id).click();await wait()
+    const width=field('Quote table width');width.value='80';width.dispatchEvent(new Event('input',{bubbles:true}));await wait()
+    const beforeWidth=section(editable(),table.id).getBoundingClientRect().width/mm(editable())
+    const followingBefore=section(editable(),totals.id).getBoundingClientRect().top
+    gesture(section(editable(),table.id),15,12);await wait()
+    const afterWidth=section(editable(),table.id).getBoundingClientRect().width/mm(editable())
+    check(Math.abs(afterWidth-beforeWidth)<.5,'Moving a table changed its visible width')
+    check(Math.abs(section(editable(),totals.id).getBoundingClientRect().top-followingBefore)<1,'Moving a table displaced following flow content')
+    check(Math.abs(section(printed(),table.id).getBoundingClientRect().width/mm(printed())-afterWidth)<.5,'Print frame width differs from canvas')
+    const totalsWidth=section(editable(),totals.id).getBoundingClientRect().width/mm(editable())
+    gesture(section(editable(),totals.id),-15,6);await wait()
+    check(Math.abs(section(editable(),totals.id).getBoundingClientRect().width/mm(editable())-totalsWidth)<.5,'Moving totals changed its visible width')
+    const beforeCancel=JSON.stringify(design.value)
+    gesture(section(editable(),totals.id),20,15,true);await wait()
+    check(JSON.stringify(design.value)===beforeCancel,'Cancelled gesture changed the saved draft')
+    // Hide through the owning editor; the live canvas must match printable flow.
+    label(`Hide layer ${customer.id}`).click();await wait()
+    check(!section(editable(),customer.id)&&!section(printed(),customer.id),'Hidden layer still occupies canvas flow')
+    const editorSubject=section(editable(),design.value.sections.find(s=>s.kind==='subject').id).getBoundingClientRect()
+    const printSubject=section(printed(),design.value.sections.find(s=>s.kind==='subject').id).getBoundingClientRect()
+    check(Math.abs((editorSubject.top-editable().getBoundingClientRect().top)/mm(editable())-(printSubject.top-printed().getBoundingClientRect().top)/mm(printed()))<.5,'Hidden section spacing differs between preview and print')
+    label('Select quote section '+totals.id).click();await wait();[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Design').click();await wait()
+    const height=field('Element height');height.value='60';height.dispatchEvent(new Event('change',{bubbles:true}));await wait()
+    const w=field('Element width');w.value='65';w.dispatchEvent(new Event('change',{bubbles:true}));await wait()
+    check(Math.abs(section(editable(),totals.id).querySelector('.quote-totals').getBoundingClientRect().width/mm(editable())-65)<.5,'Totals did not expand to its resized frame')
+    label('Add shape layer').click();await wait();field('Element fill').value='#bbf7d0';field('Element fill').dispatchEvent(new Event('input',{bubbles:true}));await wait()
+    label('Add text layer').click();await wait();const input=field('Quote design text');input.value='<b>Escaped text</b>';input.dispatchEvent(new Event('input',{bubbles:true}));await wait()
+    check(editable().textContent.includes('<b>Escaped text</b>')&&!editable().querySelector('b'),'Text was interpreted as markup')
+    label('Keyboard shortcuts').click();await wait();check(label('Designer keyboard shortcuts'),'Keyboard help missing')
+    ;[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Save design').click();await wait()
+    check(saved&&saved.sections.some(s=>s.kind==='shape'&&s.background==='#bbf7d0'),'Canvas styling did not survive validated save')
+    check(saved.sections.find(s=>s.id===table.id).flowHeight>0,'Moving flow content did not retain its original slot')
+    document.getElementById('result').textContent='ALL PASSED: moving tables/totals preserves dimensions and flow; canvas/print parity; hidden layers; cancellation; resizing; escaped text; style save; keyboard help'
+  }
+} catch(error) { document.getElementById('result').textContent='FAILED: '+error.stack }
+</script></body></html>

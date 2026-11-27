@@ -4,7 +4,7 @@ import { generateOtp } from '~/server/utils/otp';
 
 export default defineEventHandler(async (event) => {
     const body = await readBody(event);
-    const { email } = body;
+    const { email } = body; 
 
     if (!email) {
         throw createError({ statusCode: 400, statusMessage: 'Email is required' });

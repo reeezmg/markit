@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { customSectionText } from '~/utils/document-designer'
-const props = defineProps<{ text: string; heading?: boolean; border?: boolean; maxlength?: number; textLabel?: string }>()
+const props = defineProps<{ text: string; heading?: boolean; border?: boolean; maxlength?: number; textLabel?: string; hideText?: boolean; hideBorder?: boolean }>()
 const emit = defineEmits<{ 'update:text': [value: string]; 'update:heading': [value: boolean]; 'update:border': [value: boolean] }>()
 function format(style: string) {
   const [title, ...lines] = props.text.split('\n')
@@ -9,9 +9,9 @@ function format(style: string) {
 </script>
 <template>
   <div class="text-properties">
-    <label>Section text<textarea :aria-label="textLabel || 'Section text'" :value="text" :maxlength="maxlength || 5000" rows="5" @input="emit('update:text', ($event.target as HTMLTextAreaElement).value)" /></label>
+    <label v-if="!hideText">Section text<textarea :aria-label="textLabel || 'Section text'" :value="text" :maxlength="maxlength || 5000" rows="5" @input="emit('update:text', ($event.target as HTMLTextAreaElement).value)" /></label>
     <label><input :checked="heading" type="checkbox" @change="emit('update:heading', ($event.target as HTMLInputElement).checked)" /> First line is a heading</label>
-    <label><input :checked="border" type="checkbox" @change="emit('update:border', ($event.target as HTMLInputElement).checked)" /> Section border</label>
+    <label v-if="!hideBorder"><input :checked="border" type="checkbox" @change="emit('update:border', ($event.target as HTMLInputElement).checked)" /> Section border</label>
     <div role="group" aria-label="Section list formatting"><button type="button" @click="format('bullets')">Bullets</button><button type="button" @click="format('numbered')">Numbered</button><button type="button" @click="format('paragraph')">Plain text</button></div>
   </div>
 </template>

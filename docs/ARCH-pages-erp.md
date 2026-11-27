@@ -764,15 +764,166 @@ There is one active company quote design, stored as `documentDesign` in the same
 The editor offers Standard business, Professional proposal and Compact starter templates.
 Applying one replaces only the local layout and supports Undo; Save persists it. Existing
 `pdf_template` values remain readable for API compatibility but do not select a layout.
-Preference > Design quote opens `Quotes/DesignEditor.vue` using the receipt designer's
-`PrinterDesignerWorkspace` and `useDesignerHistory`. The workspace includes a live
-A4/A5/Letter preview and matching print size (legacy default A4), zoom, page margins/font/accent, ordered draggable sections and arrow
-reordering, custom text/live fields/dividers, header/footer/logo image uploads,
-image width/height/alignment, section spacing/visibility and table headings, relative
-widths, ordering, borders and padding. Undo/redo and keyboard shortcuts operate on the
-local draft; Done retains it in the open preference drawer. Save design persists all
-current preference changes through the same validated/authorized PUT; failure retains
-the draft and displays the error. Cancel/closing the drawer discards unsaved changes.
+Preference > Design quote navigates to `/erp/quotes/design`; sales orders use
+`/erp/sales-orders/design`. Each has its own page file with authenticated,
+`layout: false` and `documentDesigner` metadata. `pages/erp.vue` bypasses the Sales
+navbar/dashboard wrapper for these routes. `DocumentDesigner/Page.vue` loads and
+saves company preferences and renders `Quotes/DesignEditor.vue` as a full-viewport
+page. Its right inspector contains Back, Save design and save status; there is no
+modal header or Undo/Redo button. Quote and sales-order layers use the same Conditions panel and visible strikethrough typography toggle as receipt/label layers. `designer-rules.ts` evaluates bounded All/Any data comparisons and conditional show/hide, text formatting and paint actions for the canvas and real document output. Numeric conditions use raw document/row values via `quoteDocumentRuleValues` and `quoteItemRuleValues`; nested item rules evaluate separately for each row. `quote-rule-guards.ts` and the design schema prevent visibility rules on required item/totals sections and protected native values or their ancestors. Rules persist in existing version-one design JSON and follow normal Undo/Redo, locks and Save.
+
+Quote and sales-order designers share a Layers /
+canvas / inspector workspace with `useDesignerHistory`. Numeric dimension edits and their fixed-size mode change use one transaction; Undo restores both geometry and the previous resizing mode. Layers can be named, reordered,
+selected with Shift, hidden, locked and grouped. Required item/totals sections remain
+visible and cannot be copied, cut or deleted. Toolbar, keyboard and context-menu
+actions enforce these guards and the 30-section limit. Group duplication/paste is
+rejected atomically when it would exceed that limit; the clipboard is local to the
+open designer.
+
+`utils/quote-layer-definitions.ts` describes the nested template frames and their
+text/image/shape nodes. The company frame contains its logo and a details frame;
+document metadata, customer cards, totals rows, table headings/row values and
+signature/contact content also expose individual layers. `LayerTree.vue` displays
+expandable nested rows. Double-click or Ctrl/Command-click drills inside a frame;
+the tree selects a child directly. Native live fields start linked to the document.
+Product nodes describe the row template, so an edit applies to every product row.
+Required amounts/name content cannot be hidden, replaced with static text or cut.
+
+Optional section `elements` store these presentation edits in the existing design
+JSON. `utils/quote-layers.ts` resolves the tree, inherited locks and independent
+transform selections. Native child X/Y edits are offsets within their layout;
+the inspector reports position relative to the parent. Resized image/text nodes
+reserve their original flow slot, so resizing a logo does not push company text.
+`DocumentDesigner/QuoteLayer.vue` renders the same transforms/styles in the editor,
+print and public document. Native frames move their descendants together. Custom
+text, image, shape and frame layers can be inserted inside a selected frame, nested,
+duplicated with their children and dragged into other frames in the same section.
+Validation limits edits to 100 nodes per section, 300 per design and eight levels,
+rejects duplicate keys/cycles/invalid parents, and retains the existing image and
+total JSON size limits. This extends version-1 design JSON without database DDL.
+
+The shared `ElementProperties.vue` inspector uses compact Position, Layout,
+Appearance, Typography, Fill, Background and Stroke groups alongside existing Content/data
+connections. It exposes alignment, X/Y, rotation and flips, measured dimensions,
+persisted aspect lock, auto width/height or fixed text boxes, numeric font weight,
+six system font families, size presets, Auto/percentage line height,
+absolute/percentage letter spacing, vertical text alignment and separate fill
+colour/hex, opacity, visibility and presets for up to eight solid fills. Text Background
+uses the same colour controls, independent `backgroundOpacity`/`backgroundVisible`,
+and Add/Remove background to restore transparency. Non-text backgrounds use Fill.
+Helper text explains Fill as text/shape colour and Stroke as the layer outline.
+Existing bold/italic/underline and
+adapter-specific text options remain available. `utils/designer-presentation.ts`
+owns optional shared version-1 presentation fields. `FourValues.vue` expands
+corner radius into four independent corners, Padding into four inside edges and
+Margin into four outside edges. Margin has a unified value or independent
+top/right/bottom/left values (-300 to 300 mm). Root flow sections show existing
+`gapBefore`/`gapAfter` as top/bottom fallback; nested layers default to zero.
+Explicit `margin`/`marginSides` replace those fallbacks, including zero, and apply
+through CSS margin in editor, print and public documents.
+Unified controls display Mixed for unequal values; changing the unified value
+replaces all overrides, while collapse keeps them. Optional `cornerRadii` and
+`paddingSides` override scalar `radius`/`padding`, including explicit zero. These
+values save on root sections and nested layers, use Undo/Redo and apply to print
+and public documents. Fixed frame children retain parent-relative coordinates.
+`QuoteLayer.vue` and root
+section styles apply them in editor, print and public documents. Auto text sizes
+follow current binding values; a manual resize restores fixed sizing. Layer and
+fill visibility/opacity are distinct. Printer editors share these controls through
+their raster adapter; no database fields or migrations are added.
+
+`DocumentDesigner/QuoteCanvas.vue` measures rendered sections in millimetres. Every
+section supports dragging, eight resize handles, precise X/Y/width/minimum-height
+inputs and rotation. Multi-selection uses Shift-click or an empty-canvas marquee.
+Alignment uses selection bounds (the parent frame for a single nested layer, page
+margins for a single top-level layer); three or more
+layers support horizontal/vertical equal spacing. Groups select and transform
+together. Shift constrains moves, proportions and rotation increments; Alt bypasses
+snapping or resizes from the center. Snapping compares other visible layers' edges
+and centers and page edges/center, with optional 5 mm grid and live guides. Handles
+retain their screen size across zoom levels. Pointer capture supports mouse/touch;
+Escape, pointer cancellation and lost capture restore original values. A gesture is
+one history entry. `utils/designer-geometry.ts` owns the pure geometry calculations.
+
+The canvas provides rulers, move/hand tools, Space/middle-button panning, zoom/fit
+and Ctrl/Command-wheel zoom. Arrows nudge 0.5 mm (Shift: 5 mm). Ctrl/Command supports
+A select all, C/X/V local copy/cut/paste, D duplicate, G group (Shift: ungroup),
+Shift-L lock/unlock, brackets back/front, Z/Shift-Z/Y history, 0 fit, 1 100%, and S
+save. Input fields retain native text-editing shortcuts. Keyboard help lists the
+actions; right-click opens layer actions. Double-click text edits through an escaped
+textarea: blur or Ctrl/Command-Enter commits; Escape cancels. Rectangles/ellipses,
+text, live fields, images and dividers do not alter financial data.
+
+`DocumentDesigner/ElementProperties.vue` exposes frame geometry, rotation, opacity,
+fill, stroke, radius, stacking, font/color/bold/italic/underline, line height, letter
+spacing and image contain/cover/flip. The flat Design inspector follows the selected
+layer: parent/name, position and dimensions, linked/static text, typography for text,
+image controls for images, appearance and stroke. Page setup is a separate control;
+the old Content tab is removed. Table settings appear with the selected table, and
+insertion tools are collapsed below layer properties. A4/A5/Letter, page margins,
+font/accent and templates remain in Page setup. Locked layers and descendants of
+locked frames remain selectable but reject edits
+until unlocked. Ctrl/Command-Z undoes and Ctrl/Command-Y redoes local edits
+(Shift-Z also redoes); page keyboard listeners are removed on unmount. Input fields
+retain native undo/redo. Save design persists current preferences through the
+existing validated/authorized PUT and stays on the page; errors retain the draft.
+`useDocumentDesignDraft` hands the whole preference draft between the drawer and
+the page through Nuxt state, keyed by document kind and company. Back retains it
+and returns to the originating route/query, including Sales settings. Reopening
+Preference restores it; Cancel or closing that drawer discards unsaved changes.
+These drafts last through SPA navigation, not a browser reload. Direct visits load
+saved preferences for `entryCompany`; denied management access never mounts the
+editor. Load failures offer Retry.
+
+The Content panel at the top of the selected text/image inspector uses
+`DocumentDesigner/DataBinding.vue` for both existing and new layers. **Link to data**
+offers searchable groups for Company, Customer, Document, Totals and (within a
+repeating product layer) Item row. It previews the selected source; document sample
+values are only for the design canvas. Switching to Custom text retains the visible
+value as escaped editable text; Uploaded image and the adjacent upload control use
+an image instead of the data source. The quick **+ Text**, **+ Linked data** and
+**+ Image** buttons insert inside a selected frame, or add a page section otherwise.
+Root live-field sections and their value children edit the same source.
+
+`utils/quote-bindings.ts` owns the compatible field catalog and display values from
+the supplied document/company, including formatted dates, money, addresses and
+per-row item values. Optional section/element `binding` properties extend the
+existing version-1 design JSON; an empty element binding explicitly disconnects a
+native field, while an absent binding retains its template source. Existing image
+overrides remain uploaded images. `setQuoteLayerBinding` in `utils/quote-layers.ts`
+applies the same operation to root sections, native children and custom children;
+changes preserve layout/styles and participate in local undo/redo and saved designs.
+`Quotes/Document.vue` and `QuoteLayer.vue` resolve the saved sources for both canvas
+and print/public output. Text/images cannot use incompatible sources. Item fields
+are available only in repeated layers; **Product details · each row** is a frame
+that accepts new child layers and repeats their bindings for each product. Moving
+these children outside their row scope is blocked. Required product names, line
+amounts and summary amounts retain their original source and cannot become static;
+the inspector explains this beside the disabled selector. Locked layers inherit
+the same edit restriction for bindings.
+
+`npm run test:document-designer` covers geometry, constraints, saved JSON and protected
+sections. `tests/erp-quotes-browser.test.ts` uses mocked APIs and actual Chromium
+pointer input to cover movement at 75%/150%, resizing, cancellation, history, groups,
+clipboard, locking, inline text and mobile layout, alongside quote/order save/print
+regressions. These tests do not write to a database.
+`node tests/run-print-template-browser.mjs document-designer-browser.html` checks
+canvas/print geometry, hidden-layer spacing, cancellation, resized totals and
+validated style saves in an isolated Chromium fixture. It uses the real-time CDP
+runner and resolves only the used Lucide icons for the fixture bundle.
+`node tests/run-print-template-browser.mjs document-designer-page-browser.html`
+checks the actual page components and preference handoff: viewport/sidebar layout,
+keyboard history, failed saves, Back/Cancel, company/document isolation, settings
+return, denied access and load retry, using mocked APIs without database writes.
+`node tests/run-print-template-browser.mjs document-designer-layers-browser.html`
+checks independent logo/text movement, sibling stability during logo resizing,
+contextual inspector controls, child undo/redo/cancellation, inherited locks,
+parent and custom nested frame transforms/duplication, rotated parents, 150% zoom,
+save/reopen with live values and canvas/print geometry parity.
+`node tests/run-print-template-browser.mjs document-designer-bindings-browser.html`
+checks existing/new/nested text and image links, field search/preview, real document
+and per-row values, disconnect/reconnect, escaped text, history, source protection,
+locks, validated save/reopen and sales-order field labels, without database writes.
 
 Quote, sales-order, receipt and label adapters share `DocumentDesigner/Tools.vue`,
 `TextProperties.vue`, `CanvasToolbar.vue`, `useDocumentSections` and draft history.
@@ -781,8 +932,9 @@ first-line heading, plain/bulleted/numbered text and borders. Sections use escap
 never HTML. Document-specific bindings/renderers retain quote totals and printer limits.
 Reorder/duplicate/delete share guards; quote items/totals cannot be removed or copied.
 
-Table selection exposes shared `DocumentDesigner/TableProperties.vue` and
-`ColumnWidth.vue` controls and scrolls the properties panel to table settings.
+Table selection shows shared `DocumentDesigner/TableProperties.vue` and
+`ColumnWidth.vue` controls below the frame properties in Design. These control
+columns and cells; individual row-template layers also expose typography/geometry.
 Optional `tableStyle` JSON configures minimum body/header
 heights (mm), cell padding (mm), body/header type sizes (pt), vertical alignment and
 border thickness (mm). Quote product images support independent width/height (5–80 mm),
@@ -820,7 +972,20 @@ PNG/JPEG data URLs and CDN object keys, rejecting executable/credentialed URLs.
 `utils/quote-design.ts` allowlists content and fields, limits 30 sections and 7 columns,
 requires one visible item table/totals and visible item name/amount columns, validates
 PNG/JPEG data URLs (350 KB encoded per image, 1.5 MB design total) and rejects remote/SVG
-images. The upload UI accepts PNG/JPEG/WebP files up to 10 MB, checks image signatures, and resizes/compresses them through the shared designer image helper before storage. Images can remain in section order or use absolute x/y coordinates bounded to the selected sheet with direct canvas dragging. Independent images do not move quote content; print compensates page margins to retain physical placement. No raw HTML or
+images. The upload UI accepts PNG/JPEG/WebP up to 10 MB, checks signatures and
+resizes/compresses through the shared designer image helper before storage.
+Legacy layouts retain their section flow and original single-sheet image bounds.
+Optional section JSON stores frames (`frameWidth`, `frameHeight`, `x`, `y`), styling,
+locks and group IDs, without database columns or migrations. Moving a flow section
+stores its original height in `flowHeight` as a hidden placeholder so neighboring
+sections retain their positions. New independent images and pasted layers do not
+reserve flow space. Reset position/size returns a layer to document flow. Frame
+height is a minimum so live text/tables grow rather than clipping content. Width/X
+stay within the selected sheet; vertical positions support longer documents up to
+the validated 5,000 mm limit. Colors/fonts and image fit are allowlisted.
+`Quotes/Document.vue` applies these properties in preview and print, excludes canvas
+controls/grid from output and compensates print margins for physical placement.
+No raw HTML or
 executable expressions are stored. `Quotes/Document.vue` renders the same live design
 in the designer, `PrintPreview.vue` browser print/Save PDF, draft review and public
 customer page. Detail/public reads return the current authorized company design;
@@ -905,7 +1070,8 @@ fields. New drafts/status preferences use separate `erp:sales-order-{draft,statu
 keys scoped to the form's company/user. Successful save clears only that document's
 draft; existing order edits never replace the new-order remembered status.
 
-Preference reuses the right drawer/A4 designer, with independent company defaults at
+Preference reuses the right drawer and full-page designer at
+`/erp/sales-orders/design`, with independent company defaults at
 GeneralPreference `sales-orders/defaults` and backup at `defaults-backup`. It controls
 notes/terms, zero-value lines and editing of closed/cancelled orders. Quote customer
 approval/automatic conversion controls are hidden. Design/printing uses the shared

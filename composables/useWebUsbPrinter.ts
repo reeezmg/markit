@@ -1,4 +1,3 @@
-import { MissingLabelBarcodeError } from '~/utils/label-barcode';
 import { Capacitor } from '@capacitor/core';
 import { buildBillReceiptBytes, buildLabelPrintJobs, buildReportReceiptBytes } from '~/composables/printCommands';
 import { loadPrintTemplate } from '~/utils/load-print-template.client';
@@ -353,26 +352,22 @@ export async function prepareLabelPrint(labelData: any[], printerLabelSize: stri
     if (language === 'cpcl' && !template) throw new Error('Choose and save a default label design in Settings > Printer before printing with CPCL.');
     if (template) labelData = await loadLabelVariables(labelData, template);
     let jobs: Uint8Array[];
-    try {
-      if (template) {
-        // Scope reuse to this job: changed prices/designs must never reuse old pixels.
-        const renderedCopies = new Map<string, Promise<Uint8Array>>();
-        jobs = await Promise.all(labelData.map(item => {
-          // Non-JSON caller data is still renderable, but cannot safely share a cache key.
-          let key: string | undefined;
-          try { key = JSON.stringify(item); } catch { /* Render independently. */ }
-          let bytes = key === undefined ? undefined : renderedCopies.get(key);
-          if (!bytes) {
-            bytes = renderPrintTemplate(template, item).then(rendered => templatePrintBytes(rendered, template, language));
-            if (key !== undefined) renderedCopies.set(key, bytes);
-          }
-          return bytes;
-        }));
-      } else jobs = buildLabelPrintJobs(labelData, printerLabelSize);
-    } catch (error) {
-      if (error instanceof MissingLabelBarcodeError || language === 'cpcl' || design !== undefined) throw error;
-      console.warn('Label rendering failed; using the built-in TSPL label.', error);
-      jobs = buildLabelPrintJobs(labelData, printerLabelSize);
-    }
+    if (template) {
+      // Scope reuse to this job: changed prices/designs must never reuse old pixels.
+      const renderedCopies = new Map<string, Promise<Uint8Array>>();
+      jobs = await Promise.all(labelData.map(item => {
+        // Non-JSON caller data is still renderable, but cannot safely share a cache key.
+        let key: string | undefined;
+        try { key = JSON.stringify(item); } catch { /* Render independently. */ }
+        let bytes = key === undefined ? undefined : renderedCopies.get(key);
+        if (!bytes) {
+          bytes = renderPrintTemplate(template, item).then(rendered => templatePrintBytes(rendered, template, language));
+          if (key !== undefined) renderedCopies.set(key, bytes);
+        }
+        return bytes;
+      }));
+    } else jobs = buildLabelPrintJobs(labelData, printerLabelSize);
+    // A selected design must either print its own pixels or fail before transmission.
+    // Falling back to native commands would silently discard its layout and margins.
     return jobs;
 }

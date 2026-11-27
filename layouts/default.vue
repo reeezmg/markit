@@ -12,7 +12,12 @@ const showSidebar = computed(() =>
   route.path !== '/cleanup' || cleanupUnlocked.value
 )   
 const isSidebarCollapsed = ref(false)
-const sidebarSection = ref<SidebarSection>('erp')
+// Keep section choices through layout remounts, independently for each company.
+const selectedSections = useState<Record<string, SidebarSection>>('sidebar-selected-sections', () => ({}))
+const sidebarSection = computed({
+  get: () => selectedSections.value[auth.session.value?.companyId || ''] || 'erp',
+  set: (section: SidebarSection) => { selectedSections.value[auth.session.value?.companyId || ''] = section },
+})
 const sectionLabel = (section:SidebarSection) => sidebarSectionLabels[section]
 const sectionIcon = (section:string) => (({erp:'i-heroicons-credit-card',crm:'i-heroicons-user-group',storefront:'i-heroicons-globe-alt',connect:'i-heroicons-link'} as Record<string,string>)[section] || 'i-heroicons-squares-2x2')
 
@@ -56,10 +61,21 @@ const onSectionKeydown = (event: KeyboardEvent, section: SidebarSection) => {
   sidebarSection.value = availableSections.value[next];
   (event.currentTarget as HTMLElement).closest('[role="tablist"]')?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
 };
-watch(() => [route.path, route.query.from, availableSections.value.join(',')] as const, ([path]) => {
+watch(() => [route.path, route.query.from, auth.session.value?.companyId, availableSections.value.join(',')] as const, ([path, from, company], previous) => {
+  // Preference refreshes must not undo an explicit section choice on the same page.
+  const routeChanged = !previous || path !== previous[0] || from !== previous[1] || company !== previous[2];
+  const matchesRoute = (items: SidebarLink[]): boolean => items.some(link => {
+    if (link.children?.length && matchesRoute(link.children)) return true;
+    if (!link.to) return false;
+    const target = new URL(link.to, 'https://markit.local');
+    return (path === target.pathname || path.startsWith(`${target.pathname}/`)) &&
+      [...target.searchParams].every(([key, value]) => route.query[key] === value);
+  });
   const desired: SidebarSection = path.startsWith('/crm') || path === '/client' && route.query.from === 'crm' ? 'crm'
     : path.startsWith('/connect') ? 'connect' : path.startsWith('/storefront/') || path.startsWith('/ecommerce-cms/') || path.startsWith('/ai/') ? 'storefront' : 'erp';
-  if (!path.startsWith('/settings') && availableSections.value.includes(desired)) sidebarSection.value=desired;
+  // Shared destinations (orders, Settings) keep their originating section.
+  const currentMatches = matchesRoute(visibleMenus.value[sidebarSection.value]);
+  if (routeChanged && !path.startsWith('/settings') && (desired !== 'erp' || !currentMatches) && availableSections.value.includes(desired)) sidebarSection.value=desired;
   else if (!availableSections.value.includes(sidebarSection.value)) sidebarSection.value=availableSections.value[0] || 'erp';
 }, {immediate:true});
 
@@ -109,31 +125,26 @@ const isRouteActive = (to?: string) => {
 
             <UDashboardSidebar>
                 <template v-if="availableSections.length > 1" #header>
-                    <div
-                        class="grid w-full grid-cols-2 gap-1 rounded-lg bg-primary-50 p-1 dark:bg-primary-950"
-                        role="tablist"
-                        aria-label="Sidebar section"
-                        aria-orientation="horizontal"
-                    >
-                        <button
-                            v-for="(section, index) in availableSections"
-                            :key="section"
-                            type="button"
-                            role="tab"
-                            :aria-selected="sidebarSection === section"
-                            :tabindex="sidebarSection === section ? 0 : -1"
-                            :class="[
-                                'flex min-h-10 min-w-0 items-center justify-center rounded-md px-1.5 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
-                                availableSections.length === 3 && index === 2 ? 'col-span-2' : '',
-                                sidebarSection === section
-                                    ? 'bg-primary-500 text-white shadow-sm'
-                                    : 'text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-900',
-                            ]"
-                            @click="sidebarSection = section"
-                            @keydown="onSectionKeydown($event, section)"
-                        >
-                            {{ sectionLabel(section) }}
-                        </button>
+                    <div class="flex w-full items-center gap-0.5" role="tablist" aria-label="Sidebar section" aria-orientation="horizontal">
+                        <UTooltip v-for="section in availableSections" :key="section" :text="sectionLabel(section)">
+                            <button
+                                type="button"
+                                role="tab"
+                                :aria-label="sectionLabel(section)"
+                                :aria-selected="sidebarSection === section"
+                                :tabindex="sidebarSection === section ? 0 : -1"
+                                :class="[
+                                    'flex h-10 w-10 shrink-0 items-center justify-center border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+                                    sidebarSection === section
+                                        ? 'border-primary-500 text-primary-500'
+                                        : 'border-transparent text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200',
+                                ]"
+                                @click="sidebarSection = section"
+                                @keydown="onSectionKeydown($event, section)"
+                            >
+                                <UIcon :name="sectionIcon(section)" class="h-5 w-5" />
+                            </button>
+                        </UTooltip>
                     </div>
                 </template>
 
@@ -175,17 +186,17 @@ const isRouteActive = (to?: string) => {
 
           <UDashboardSidebar :ui="{ header: 'px-1', body: 'px-1', footer: 'px-1' }">
             <template v-if="availableSections.length > 1" #header>
-              <div class="mx-auto flex w-12 shrink-0 flex-col items-center gap-1 rounded-xl border border-primary-100 bg-primary-50 p-0.5 dark:border-primary-900 dark:bg-primary-950" role="tablist" aria-label="Sidebar section" aria-orientation="vertical">
+              <div class="mx-auto flex w-12 shrink-0 flex-col items-center gap-1 p-0.5" role="tablist" aria-label="Sidebar section" aria-orientation="vertical">
                 <UTooltip v-for="section in availableSections" :key="section" :text="sectionLabel(section)">
                   <button
                     type="button"
                     :aria-label="sectionLabel(section)"
                     :tabindex="sidebarSection === section ? 0 : -1"
                     :class="[
-                      'flex h-10 w-10 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+                      'flex h-10 w-10 items-center justify-center border-l-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
                       sidebarSection === section
-                        ? 'bg-primary-500 text-white shadow-sm'
-                        : 'text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-900',
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200',
                     ]"
                     role="tab"
                     :aria-selected="sidebarSection === section"

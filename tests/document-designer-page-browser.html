@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Full-page print designer checks</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;color:#0f172a}button,input,select,textarea{font:inherit}button{cursor:pointer;background:transparent;border:0}h1,h2,h3,p{margin:0}button:disabled{cursor:default}.fixture-button{border:1px solid #cbd5e1;border-radius:6px;padding:7px 12px;font-size:12px;background:white}.fixture-button.primary{background:#f97316;color:white;border-color:#f97316}#result{position:fixed;bottom:0;left:0;z-index:30000;background:white;font-size:10px;max-width:95vw}.preference-fixture{padding:20px}.preference-fixture textarea{display:block}
+</style></head><body><div id="app"></div><pre id="result">Running</pre><script type="module">
+import * as Vue from 'vue'
+import * as Router from 'vue-router'
+import QuoteDesignPage from '../pages/erp/quotes/design.vue'
+import OrderDesignPage from '../pages/erp/sales-orders/design.vue'
+import Preferences from '../components/Quotes/Preferences.vue'
+import { emptyQuotePreferences } from '../utils/quote-preferences'
+import { quoteDesignTemplate } from '../utils/quote-design'
+const h=Vue.h,states=new Map(),records=new Map(),calls=[],meta=[]
+let failSave=false,failLoad=false,denied=false
+const clone=value=>JSON.parse(JSON.stringify(value))
+const record=(company,kind)=>{
+  const key=company+':'+kind
+  if(!records.has(key))records.set(key,{...emptyQuotePreferences(),documentDesign:quoteDesignTemplate('professional')})
+  return records.get(key)
+}
+const Home={setup(){
+  const open=Vue.ref(false),route=Router.useRoute()
+  return()=>h('main',{class:'preference-fixture'},[h('button',{onClick:()=>open.value=true},'Preference'),h(Preferences,{modelValue:open.value,'onUpdate:modelValue':value=>open.value=value,documentKind:route.path.includes('sales-orders')?'sales-order':'quote'})])
+}}
+const router=Router.createRouter({history:Router.createMemoryHistory(),routes:[
+  {path:'/erp/quotes',component:Home},{path:'/erp/sales-orders',component:Home},{path:'/erp/settings',component:Home},
+  {path:'/erp/quotes/design',component:QuoteDesignPage},{path:'/erp/sales-orders/design',component:OrderDesignPage}
+]})
+Object.assign(globalThis,Vue,{
+  definePageMeta:value=>meta.push(value),useHead(){},useToast:()=>({add(){}}),useRoute:Router.useRoute,navigateTo:to=>router.push(to),
+  useState:(key,init)=>{if(!states.has(key))states.set(key,Vue.ref(init()));return states.get(key)},
+  useCompanyScope:()=>{
+    const route=Router.useRoute(),companyId=Vue.ref(String(route.query.entryCompany||'company'))
+    return {companyId,ready:Promise.resolve(),auth:{session:Vue.ref({companyName:'Blue Nest',currency:'INR'})},fetch:async(url,options={})=>{
+      const kind=url.includes('sales-orders')?'sales-order':'quote',company=companyId.value
+      calls.push({company,kind,method:options.method||'GET'})
+      if(options.method==='PUT'){
+        if(failSave){failSave=false;throw Error('Save unavailable')}
+        if(denied)throw Error('Forbidden')
+        records.set(company+':'+kind,clone(options.body));return {success:true}
+      }
+      if(failLoad){failLoad=false;throw Error('Load unavailable')}
+      return {preferences:clone(record(company,kind)),company:{companyName:'Blue Nest',currency:'INR'},canManage:!denied}
+    }}
+  }
+})
+const app=Vue.createApp({render:()=>h(Router.RouterView,null,{default:({Component,route})=>Component?h(Component,{key:route.fullPath}):null})})
+app.use(router)
+app.component('UButton',{inheritAttrs:false,props:['disabled','loading','color','type'],setup:(p,{attrs,slots})=>()=>h('button',{...attrs,type:p.type||'button',disabled:p.disabled||p.loading,class:['fixture-button',!p.color?'primary':'']},slots.default?.())})
+app.component('USlideover',{props:['modelValue','preventClose','side','ui'],setup:(p,{slots})=>()=>p.modelValue?h('div',{role:'dialog'},slots.default?.()):null})
+app.component('UFormGroup',{props:['label'],setup:(p,{slots})=>()=>h('label',[p.label,slots.default?.()])})
+for(const name of ['UInput','UTextarea'])app.component(name,{inheritAttrs:false,props:['modelValue'],emits:['update:modelValue'],setup:(p,{attrs,emit})=>()=>h(name==='UInput'?'input':'textarea',{...attrs,value:p.modelValue,onInput:e=>emit('update:modelValue',e.target.value)})})
+app.component('UCheckbox',{inheritAttrs:false,props:['modelValue','label'],emits:['update:modelValue'],setup:(p,{attrs,emit})=>()=>h('label',[h('input',{...attrs,type:'checkbox',checked:p.modelValue,onChange:e=>emit('update:modelValue',e.target.checked)}),p.label])})
+app.component('UAlert',{props:['title','description'],setup:p=>()=>h('p',{role:'alert'},p.title+' '+p.description)})
+const preview=new URLSearchParams(location.search).has('preview')
+await router.push(preview?'/erp/quotes/design?entryCompany=branch-a':'/erp/quotes?entryCompany=branch-a')
+await router.isReady();app.mount('#app')
+const pause=()=>new Promise(resolve=>setTimeout(resolve,30))
+const check=(ok,message)=>{if(!ok)throw Error(message)}
+async function until(predicate,message){for(let i=0;i<150;i++){if(predicate())return;await pause()}throw Error(message)}
+const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text)
+const label=name=>document.querySelector(`[aria-label="${name}"]`)
+const editor=()=>document.querySelector('.document-design-page')
+const count=()=>document.querySelectorAll('.section-list > li').length
+const history=key=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true,cancelable:true}))
+const fill=(name,value)=>{const el=label(name);check(el,'Missing '+name);el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}))}
+try{
+  if(preview){await until(editor,'Preview did not load');document.getElementById('result').textContent='PREVIEW READY'}
+  else{
+    button('Preference').click();await until(()=>button('Design quote'),'Preferences did not load')
+    fill('Default quote notes','Keep this unsaved preference');button('Design quote').click();await until(editor,'Designer route did not load')
+    check(router.currentRoute.value.fullPath==='/erp/quotes/design?entryCompany=branch-a','Designer did not navigate to its company page')
+    check(!document.querySelector('dialog,[role=dialog],.workspace-header'),'Designer still opens in a modal')
+    check(!button('Undo')&&!button('Redo')&&!button('Done'),'Old header actions remain')
+    check(button('Save design').closest('.design-properties'),'Save is outside the right sidebar')
+    check(editor().getBoundingClientRect().height===innerHeight&&editor().getBoundingClientRect().top===0,'Designer does not fill the viewport')
+    check(meta.every(m=>m.auth&&m.layout===false&&m.documentDesigner),'Designer route metadata lost auth or the full-page shell')
+    const initial=count();label('Add text layer').click();await pause();check(count()===initial+1,'Add layer failed')
+    history('z');await pause();check(count()===initial,'Ctrl+Z did not undo from the page')
+    history('y');await pause();check(count()===initial+1,'Ctrl+Y did not redo from the page')
+    document.querySelector('.layer-select').click();await pause()
+    const nativeUndo=new KeyboardEvent('keydown',{key:'z',ctrlKey:true,bubbles:true,cancelable:true});label('Layer name').dispatchEvent(nativeUndo)
+    check(!nativeUndo.defaultPrevented,'Designer intercepted a text field undo')
+    failSave=true;button('Save design').click();await until(()=>document.querySelector('[role=alert]')?.textContent.includes('Save unavailable'),'Save failure not visible')
+    check(editor()&&count()===initial+1,'Failed save discarded the draft')
+    button('Save design').click();await until(()=>document.querySelector('.inspector-save-state')?.textContent==='All changes saved','Save did not settle')
+    check(editor()&&router.currentRoute.value.path.endsWith('/design'),'Save navigated away from the designer')
+    check(record('branch-a','quote').customerNotes==='Keep this unsaved preference'&&record('branch-a','quote').documentDesign.sections.length===initial+1,'Handoff preferences or design were not saved')
+    label('Add shape layer').click();await pause();label('Back from quote designer').click();await until(()=>button('Preference'),'Back did not return to the source')
+    button('Preference').click();await until(()=>button('Design quote'),'Returned preferences did not load');button('Design quote').click();await until(editor,'Draft did not reopen')
+    check(count()===initial+2,'Back lost the unsaved design draft')
+    label('Back from quote designer').click();await until(()=>button('Preference'),'Second Back failed');button('Preference').click();await until(()=>button('Design quote'),'Preferences missing');button('Cancel').click();await pause()
+    await router.push('/erp/quotes/design?entryCompany=branch-b');await until(editor,'Direct company page failed')
+    check(count()===initial&&record('branch-b','quote').customerNotes!=='Keep this unsaved preference','Draft leaked between companies')
+    await router.push('/erp/quotes/design?entryCompany=branch-a');await until(editor,'Original company page failed');check(count()===initial+1,'Cancel did not discard the unsaved draft')
+    await router.push('/erp/sales-orders?entryCompany=branch-a');await until(()=>button('Preference'),'Order page missing');button('Preference').click();await until(()=>button('Design sales order'),'Order preferences missing');button('Design sales order').click();await until(editor,'Order designer missing')
+    check(label('Sales order designer')&&count()===initial,'Quote draft leaked to sales orders');label('Add text layer').click();await pause();button('Save design').click();await until(()=>document.querySelector('.inspector-save-state')?.textContent==='All changes saved','Order save failed')
+    check(record('branch-a','sales-order').documentDesign.sections.length===initial+1,'Order used the wrong preference endpoint')
+    label('Back from sales order designer').click();await until(()=>button('Preference'),'Order Back failed');check(router.currentRoute.value.path==='/erp/sales-orders','Order Back returned to quotes')
+    await router.push('/erp/settings?entryCompany=branch-a&section=preferences');await until(()=>button('Preference'),'Settings missing');button('Preference').click();await until(()=>button('Design quote'),'Settings preferences missing');button('Design quote').click();await until(editor,'Settings designer missing');label('Back from quote designer').click();await until(()=>button('Preference'),'Settings Back failed');check(router.currentRoute.value.fullPath==='/erp/settings?entryCompany=branch-a&section=preferences','Back lost the settings tab or company')
+    denied=true;const writes=calls.filter(c=>c.method==='PUT').length;await router.push('/erp/quotes/design?entryCompany=denied');await until(()=>document.querySelector('[role=alert]'),'Role denial missing');check(!editor()&&calls.filter(c=>c.method==='PUT').length===writes,'Denied company mounted or saved the editor')
+    denied=false;failLoad=true;await router.push('/erp/quotes/design?entryCompany=retry');await until(()=>document.querySelector('[role=alert]')?.textContent.includes('Load unavailable'),'Load failure missing');button('Retry').click();await until(editor,'Load retry failed')
+    document.getElementById('result').textContent='ALL PASSED: dedicated full-page routes; sidebar Save; Ctrl+Z/Y; input undo; failed save retention; draft handoff/back/cancel; company/order isolation; settings return; access denial; load retry'
+  }
+}catch(error){document.getElementById('result').textContent='FAILED: '+error.stack}
+</script></body></html>

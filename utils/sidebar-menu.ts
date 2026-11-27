@@ -1084,7 +1084,6 @@ export function buildSidebarMenu(section: SidebarSection, session: Record<string
   const afterSalesLinks = { id: 'after-sales', label: 'After-sales', icon: 'i-heroicons-wrench-screwdriver', children: [
     {label:'Service workspace',to:'/after-sales'}, {label:'Service items',to:'/after-sales/items'}, {label:'Maintenance plans',to:'/after-sales/maintenance'},
     {label:'Warranty plans',to:'/after-sales/warranty'}, {label:'Guarantee plans',to:'/after-sales/guarantee'}] };
-  if (workflow.includeAfterSales) allLinks.push(afterSalesLinks);
   const accountantIndex = allLinks.findIndex(link => link.id === 'accountant');
   allLinks.splice(accountantIndex >= 0 ? accountantIndex + 1 : expenseIndex + 1, 0, investmentLinks, {
     id: 'loans', label: 'Loans', to: '/loans', icon: 'i-heroicons-banknotes', children: [
@@ -1094,6 +1093,7 @@ export function buildSidebarMenu(section: SidebarSection, session: Record<string
       { label: 'Earlier history', to: '/loans/history', exact: true },
     ],
   });
+  if (workflow.includeAfterSales) allLinks.splice(allLinks.findIndex(link => link.id === 'expense') + 1, 0, afterSalesLinks);
 
   if (section === 'crm') {
     if (!crmStaff(session.role || '')) return []
@@ -1116,7 +1116,6 @@ export function buildSidebarMenu(section: SidebarSection, session: Record<string
     })
 
     return collapseGroups([
-      ...(workflow.includeAfterSales ? [afterSalesLinks] : []),
       ...(editor ? [{ ...editor, id: 'storefront-editor', icon: 'i-heroicons-paint-brush' }] : []),
       group('storefront-content', 'Content', 'i-heroicons-document-text', [
         '/ecommerce-cms/faq', '/ecommerce-cms/blogs', '/ecommerce-cms/gallery', '/ecommerce-cms/policies',

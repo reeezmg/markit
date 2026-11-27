@@ -1,13 +1,15 @@
+import { defaultQuoteDesign, normalizeQuoteDesign } from '../utils/quote-design';
+import { absoluteLetterSpacing, verticalTextOffset, paintColor, compositeFills, transformLayerVector, layerCornerRadii, layerPadding, layerBoxStyle } from '../utils/designer-presentation';
 import { STANDARD_LABEL_ID } from '../utils/print-templates';
 import { labelBarcodeModuleWidth, buildLabelPrintJobs } from '../composables/printCommands';
 import { receiptPaperSizes, labelPaperSizes, resizePrintPaper } from '../utils/print-paper';
-import { originalLabelTemplate, elementIsVisible, elementIsStruck, labelHasDiscount, templateSchema } from '../utils/print-templates';
+import { originalLabelTemplate, printElementValue, elementIsVisible, elementIsStruck, labelHasDiscount, templateSchema, printElementMargins, setPrintFlowTop } from '../utils/print-templates';
 import { getReceiptFinishing, saveReceiptFinishing, receiptFinishBytes, receiptBottomMarginMm, RECEIPT_FINISHING_KEY } from '../utils/receipt-finishing';
 import { templatePrintBytes } from '../utils/print-template-renderer.client';
 import { buildBillReceiptBytes, buildReportReceiptBytes } from '../composables/printCommands';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { activeTemplate, defaultTemplate, emptyPrintSettings, fieldValue, monochromeBytes, printSettingsSchema } from '../utils/print-templates';
+import { activeTemplate, defaultTemplate, newElement, emptyPrintSettings, fieldValue, monochromeBytes, printSettingsSchema } from '../utils/print-templates';
 import { cachePrintSettings, loadPrintTemplate } from '../utils/load-print-template.client';
 import { labelVariables, customLabelVariables, labelSampleData } from '../utils/label-variables';
 import { loadLabelVariables } from '../utils/load-label-variables.client';
@@ -26,6 +28,46 @@ import { classicReceiptTemplate, CLASSIC_RECEIPT_ID } from '../utils/print-templ
 import { receiptSummary } from '../utils/receipt-summary';
 import { tableColumnLines, tableColumnTotal } from '../utils/receipt-table';
 import { receiptPhotoFixture } from './receipt-photo-fixture';
+import { printLayerTree, printBindingFields, setPrintBinding, printElementPresentation, patchPrintPresentation, printLayerLocalBox, printFrameMoveSize, printTreeDepth } from '../utils/print-designer';
+import { upgradeReceiptToolTemplate } from '../utils/receipt-tool-template';
+import { upgradeLabelToolTemplate } from '../utils/label-tool-template';
+import { legacyReceiptFixture } from './legacy-receipt-fixture';
+import { flattenQuoteLayers } from '../utils/quote-layers';
+
+test('print frames preserve nested data links, locks and style through saved version-one settings', () => {
+  const template = defaultTemplate('label');
+  const frame = { ...newElement('frame', template.width), width: 42, height: 20, locked: true };
+  const text = { ...newElement('text', frame.width), parentId: frame.id, width: 35, height: 8, text: 'Static text' };
+  template.elements.push(frame, text);
+  setPrintBinding(text, 'product.name', { product: { name: 'Actual product' } });
+  assert.equal(text.type, 'field'); assert.equal(text.field, 'product.name'); assert.equal(text.text, '');
+  let nodes = flattenQuoteLayers(printLayerTree(template));
+  const child = nodes.find(n => n.element?.id === text.id)!;
+  assert.equal(child.parentId, frame.id); assert.equal(child.locked, true); assert.equal(child.binding, 'product.name');
+  const saved = printSettingsSchema.parse({ ...emptyPrintSettings(), templates: [template], labelId: template.id });
+  assert.equal(saved.templates[0].elements.find(e => e.id === text.id)?.parentId, frame.id);
+  setPrintBinding(text, '', { product: { name: '<b>Actual product</b>' } });
+  assert.equal(text.type, 'text'); assert.equal(text.text, '<b>Actual product</b>');
+  assert.ok(printBindingFields(template, [{ key: 'product.customFields.fabric', label: 'Fabric', group: 'Product custom fields', sample: 'Cotton' }], text).some(v => v.key === 'product.customFields.fabric'));
+  frame.visible = false; nodes = flattenQuoteLayers(printLayerTree(template));
+  assert.equal(nodes.find(n => n.element?.id === text.id)?.visible, false);
+});
+
+test('print JSON rejects cycles, non-frame parents, invalid child bounds and oversized trees', () => {
+  for (const mode of ['cycle', 'parent', 'bounds', 'depth']) {
+    const template = defaultTemplate('label');
+    const frame = { ...newElement('frame', template.width), width: 42, height: 20 };
+    const child = { ...newElement('text', frame.width), parentId: frame.id, width: 20, height: 5 };
+    template.elements.push(frame, child);
+    if (mode === 'cycle') frame.parentId = frame.id;
+    if (mode === 'parent') child.parentId = template.elements[0].id;
+    if (mode === 'bounds') child.x = 40;
+    if (mode === 'depth') { let parent = frame.id; for (let i = 0; i < 8; i++) { const nested = { ...newElement('frame', 40), id: `frame-${i}`, parentId: parent, width: 40, height: 20 }; template.elements.push(nested); parent = nested.id; } }
+    assert.equal(templateSchema.safeParse(template).success, false, mode);
+  }
+  const receipt = defaultTemplate('receipt'); receipt.elements[0].placement = 'absolute';
+  assert.equal(templateSchema.safeParse(receipt).success, true);
+});
 
 test('photo receipt reproduces tax groups, totals, savings and payment data', () => {
   const summary = receiptSummary(receiptPhotoFixture);
@@ -132,7 +174,7 @@ test('built-in no-tax receipt uses Tax Receipt styling with six item columns and
   assert.equal(noTax.fontFamily, tax.fontFamily);
   assert.equal(noTax.width, tax.width);
   assert.equal(noTax.dpi, tax.dpi);
-  const expected = tax.elements.filter((e, i, all) => e.type !== 'items' && e.type !== 'taxsummary' && !(e.type === 'spacer' && all[i + 1]?.type === 'taxsummary'));
+  const expected = tax.elements.filter((e, i, all) => e.type !== 'items' && e.type !== 'taxsummary' && e.whenField !== 'receiptTaxGroups');
   assert.deepEqual(noTax.elements.filter(e => e.type !== 'items'), expected);
   const table = noTax.elements.find(e => e.type === 'items')!;
   assert.deepEqual(table.columns!.map(c => c.header), ['SL', 'DESCRIPTION', 'QTY', 'MRP', 'DISC', 'VALUE']);
@@ -283,6 +325,9 @@ test('label enrichment keeps company identity, deduplicates copies, and rejects 
     assert.equal(requests.length, 1); assert.deepEqual(requests[0].body.itemIds, ['item-a']);
     assert.equal(labels.length, 2); assert.equal(labels[0].company.name, 'branch-a');
     await loadLabelVariables(labels, template); assert.equal(requests.length, 1);
+    const conditionOnly = defaultTemplate('label'); conditionOnly.elements = [{...newElement('text',50),rules:[{id:'related-rule',match:'all',action:'bold',conditions:[{field:'productName',operator:'eq',source:'field',value:'company.name'}]}]}];
+    const conditionData = await loadLabelVariables([{itemId:'item-a',companyId:'branch-a',barcode:'123'}],conditionOnly);
+    assert.equal(conditionData[0].company.name,'branch-a'); assert.equal(requests.length,2,'Fields used only in conditions must trigger a scoped variable lookup');
     const recovered = await loadLabelVariables([{ itemId: 'item-a', companyId: 'branch-a', barcode: '' }], defaultTemplate('label'));
     assert.equal(recovered[0].barcode, '123');
     assert.equal(fieldValue(recovered[0], 'barcode'), '123');
@@ -431,8 +476,12 @@ test('receipt finishing persists device settings and disables both feed and cut 
 
 test('original label starter includes variant, size, code and editable discount rules', () => {
   const template = templateSchema.parse(originalLabelTemplate());
-  assert.deepEqual(template.elements.filter(e => e.type === 'field').map(e => e.field), ['shopname','productName','labelVariantSize','sprice','dprice','code']);
-  assert.equal(template.elements.every(e => e.align === 'left'), true);
+  assert.deepEqual(template.elements.filter(e => e.type === 'field').map(e => e.field), ['shopname','productName','labelVariantSize','sprice','dprice','code','barcode']);
+  assert.equal(template.fontFamily, 'sans');
+  assert.ok(template.elements.every(e => ['field', 'line', 'barcode'].includes(e.type)));
+  assert.ok(template.elements.filter(e => e.type === 'field').every(e => e.fontFamily === 'Arial' && e.lineHeight === 1.15));
+  assert.equal(template.elements.find(e => e.type === 'barcode')!.barcodeDisplayValue, false);
+  assert.equal(template.elements.at(-1)!.align, 'center');
   assert.equal(fieldValue({ name: 'Sample', size: 'M' }, 'labelVariantSize'), 'Sample - M');
   assert.equal(fieldValue({ variantName: 'Blue', size: '' }, 'labelVariantSize'), 'Blue');
   const mrp = template.elements.find(e=>e.field==='sprice')!, discount = template.elements.find(e=>e.field==='dprice')!;
@@ -446,14 +495,62 @@ test('original label starter includes variant, size, code and editable discount 
     const data = { sprice:1440, dprice:price };
     assert.equal(elementIsVisible(discount,data),true);
     assert.equal(elementIsStruck(mrp,data),true);
-    assert.equal(elementIsStruck({...mrp,strikeThrough:'never'},data),false);
-    assert.equal(elementIsVisible({...discount,visibility:'no-discount'},data),false);
+    assert.equal(elementIsStruck({...mrp,rules:[],strike:false},data),false);
+    assert.equal(elementIsVisible({...discount,rules:[],visibility:'no-discount'},data),false);
   }
-  assert.equal(elementIsVisible({...discount,visibility:'no-discount'},{sprice:1440,dprice:null}),true);
+  assert.equal(elementIsVisible({...discount,rules:[],visibility:'no-discount'},{sprice:1440,dprice:null}),true);
   assert.equal(elementIsStruck({...mrp,strikeThrough:'always'},{}),true);
   assert.equal(labelHasDiscount({variant:{sprice:1440,dprice:1299}}),true);
 });
 
+test('only untouched legacy label starters refresh as drafts, retaining identity and existing layer IDs', () => {
+  const make = (type: any, field: string, text: string, y: number, height: number, fontSize = 8, bold = false) => ({ ...newElement(type, 50), field, text, y, height, fontSize, bold, align: 'left' });
+  const legacy = templateSchema.parse({ ...originalLabelTemplate(), name: 'My saved label', fontFamily: 'thermal', elements: [
+    make('field','shopname','',1,5,11,true), make('line','','',5,2), make('field','productName','',7,3.5), make('field','labelVariantSize','',11,3.5),
+    {...make('field','sprice','MRP Rs.',15,3.5),strikeThrough:'discount'}, {...make('field','dprice','Discount Rs.',19,3.5),visibility:'discount'},
+    make('field','code','',23,3,7), make('barcode','barcode','',26,10),
+  ] });
+  const before = JSON.stringify(legacy), updated = upgradeLabelToolTemplate(legacy);
+  assert.notEqual(updated, legacy);
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal(updated.id, legacy.id); assert.equal(updated.name, legacy.name);
+  assert.deepEqual(updated.elements.slice(0,8).map(e=>e.id),legacy.elements.map(e=>e.id));
+  assert.equal(updated.fontFamily,'sans'); assert.equal(updated.elements.length,9);
+  assert.ok(templateSchema.safeParse(updated).success);
+  assert.equal(upgradeLabelToolTemplate(updated),updated);
+  for (const change of [(t: typeof legacy)=>{t.elements[0].x+=.1}, (t: typeof legacy)=>{t.elements[0].background='#ffffff'}, (t: typeof legacy)=>{t.elements[0].text='My shop: '}, (t: typeof legacy)=>{t.dpi='300'}]) {
+    const custom=structuredClone(legacy);change(custom);assert.equal(upgradeLabelToolTemplate(custom),custom);
+  }
+});
+
+
+test('TSPL label jobs reset remembered positioning and retain the full blank left margin at both DPIs', () => {
+  for (const dpi of ['203','300'] as const) {
+    const template = {...originalLabelTemplate(),dpi};
+    const width=Math.round(template.width*Number(dpi)/25.4), height=3, left=Math.round(2*Number(dpi)/25.4);
+    const rgba=new Uint8ClampedArray(width*height*4).fill(255);
+    for(let y=0;y<height;y++) for(let x=left;x<left+8;x++) { const index=(y*width+x)*4;rgba[index]=rgba[index+1]=rgba[index+2]=0; }
+    const canvas={width,height,getContext:()=>({getImageData:()=>({data:rgba})})} as any;
+    const bytes=templatePrintBytes({canvas,bounds:[],width:template.width,height:template.height},template);
+    const marker=`BITMAP 0,0,${Math.ceil(width/8)},${height},0,`,prefix=Buffer.from(bytes).indexOf(marker),header=Buffer.from(bytes.slice(0,prefix)).toString('ascii');
+    assert.ok(prefix>0);assert.ok(header.includes('DIRECTION 1,0\r\n'));
+    // Model a printer left shifted by an earlier application's job.
+    const state={referenceX:7,referenceY:9,shiftX:-left,shiftY:12};
+    for(const command of header.trim().split('\r\n')) {
+      const match=/^(REFERENCE|SHIFT) (-?\d+),(-?\d+)$/.exec(command);
+      if(match) { const key=match[1]==='REFERENCE'?'reference':'shift';state[`${key}X`]=Number(match[2]);state[`${key}Y`]=Number(match[3]); }
+    }
+    assert.deepEqual(state,{referenceX:0,referenceY:0,shiftX:0,shiftY:0});
+    const start=prefix+marker.length,stride=Math.ceil(width/8);
+    for(let y=0;y<height;y++) {
+      const dark=(x:number)=>(bytes[start+y*stride+(x>>3)]&(128>>(x%8)))===0;
+      for(let x=0;x<left;x++) assert.equal(dark(x),false,`${dpi}: blank left pixels were trimmed`);
+      assert.equal(dark(left),true);assert.equal(left+state.referenceX+state.shiftX,left);
+    }
+    const second=templatePrintBytes({canvas,bounds:[],width:template.width,height:template.height},template);
+    assert.deepEqual(second,bytes,'Every label must reset placement independently');
+  }
+});
 
 test('CPCL encodes the exact preview pixels with black bits, correct dimensions and no TSPL commands', () => {
   const template = originalLabelTemplate();
@@ -508,4 +605,199 @@ test('standard label is a selectable image template outside custom slots', () =>
   assert.equal(settings.templates.length, 0);
   assert.equal(printSettingsSchema.safeParse({ ...settings, receiptId: STANDARD_LABEL_ID }).success, false);
   assert.equal(printSettingsSchema.safeParse({ ...settings, templates: [template] }).success, false);
+});
+
+
+test('linked text affixes survive save, wrap zero values, omit missing data and snapshot once on disconnect', () => {
+  for (const type of ['field', 'barcode', 'qrcode'] as const) {
+    const element = { ...newElement(type, 72), field: 'grandTotal', text: 'Total: ', suffix: ' incl. tax' };
+    assert.equal(printElementValue(element, { grandTotal: 0 }), 'Total: 0.00 incl. tax');
+    assert.equal(printElementValue(element, {}), '');
+    const stored = printSettingsSchema.parse({ ...emptyPrintSettings(), templates: [{ ...classicReceiptTemplate(), id: 'affixes', elements: [element] }] });
+    assert.equal(stored.templates[0].elements[0].suffix, ' incl. tax');
+    setPrintBinding(element, '', { grandTotal: 25 });
+    assert.equal(element.text, 'Total: 25.00 incl. tax');
+    assert.equal(element.suffix, undefined);
+    assert.equal(printElementValue(element, {}), 'Total: 25.00 incl. tax');
+    setPrintBinding(element, 'grandTotal', { grandTotal: 25 });
+    assert.equal(printElementValue(element, { grandTotal: 25 }), '25.00');
+  }
+  const manual = { ...newElement('text', 72), text: 'Fixed text', suffix: 'stale' };
+  assert.equal(printElementValue(manual, {}), 'Fixed text');
+  assert.equal(templateSchema.safeParse({ ...classicReceiptTemplate(), elements: [{ ...manual, suffix: 'a'.repeat(2001) }] }).success, false);
+  assert.equal(templateSchema.parse(classicReceiptTemplate()).elements[0].suffix, undefined);
+});
+
+test('conditional visibility accepts zero values and hides missing or whitespace-only data', () => {
+  const element = { ...newElement('text', 72), whenField: 'clientPhone' };
+  for (const clientPhone of [undefined, null, '', '   ']) assert.equal(elementIsVisible(element, { clientPhone }), false);
+  for (const clientPhone of [0, '01234']) assert.equal(elementIsVisible(element, { clientPhone }), true);
+  assert.equal(elementIsVisible({ ...element, visible: false }, { clientPhone: '1234' }), false);
+  assert.equal(elementIsVisible({ ...element, whenField: undefined }, {}), true);
+});
+
+
+test('shared inspector presentation fields survive both document formats without changing old defaults', () => {
+  const style = { fontWeight: 500, fontFamily: 'Courier New' as const, letterSpacing: 12, letterSpacingUnit: 'percent' as const, textVerticalAlign: 'middle' as const, resizeMode: 'auto-height' as const, aspectLocked: true, fillOpacity: .7, fillVisible: false };
+  const quote = defaultQuoteDesign(); Object.assign(quote.sections.at(-1)!, style); quote.sections[0].elements = [{ key:'company-name', ...style }];
+  const savedQuote = normalizeQuoteDesign(quote);
+  for (const [key,value] of Object.entries(style)) { assert.equal((savedQuote.sections.at(-1)! as any)[key],value); assert.equal((savedQuote.sections[0].elements![0] as any)[key],value); }
+  const receipt = templateSchema.parse({ ...classicReceiptTemplate(), elements: [{ ...newElement('text',72),...style }] });
+  for (const [key,value] of Object.entries(style)) assert.equal((receipt.elements[0] as any)[key],value);
+  const legacy = classicReceiptTemplate(); delete legacy.elements[0].resizeMode;
+  assert.equal(templateSchema.parse(legacy).elements[0].resizeMode,undefined);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...receipt.elements[0],fontWeight:1000}]}).success,false);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...receipt.elements[0],fillOpacity:2}]}).success,false);
+  assert.equal(absoluteLetterSpacing(10,'percent',12),1.2); assert.equal(absoluteLetterSpacing(2,'absolute',12),2);
+  assert.equal(verticalTextOffset(20,8,'middle'),6); assert.equal(verticalTextOffset(20,8,'bottom'),12); assert.equal(verticalTextOffset(3,8,'bottom'),0);
+  assert.equal(paintColor('#112233',.5),'rgba(17,34,51,0.5)'); assert.equal(paintColor('#112233',1,false),'transparent');
+});
+
+
+test('multiple solid fills compose in order and persist independently of layer opacity', () => {
+  const fills=[{color:'#ff0000',opacity:.5,visible:true},{color:'#0000ff',opacity:1,visible:true}];
+  assert.deepEqual(compositeFills(fills),{color:'#800080',opacity:1,css:'#800080',visible:true});
+  assert.equal(compositeFills([{...fills[0],visible:false},fills[1]]).color,'#0000ff');
+  assert.equal(compositeFills([]).visible,false);
+  const quote=defaultQuoteDesign();quote.sections[0].fills=fills;assert.deepEqual(normalizeQuoteDesign(quote).sections[0].fills,fills);
+  const receipt=templateSchema.parse({...classicReceiptTemplate(),elements:[{...newElement('shape',72),fills,opacity:.3}]});assert.deepEqual(receipt.elements[0].fills,fills);assert.equal(receipt.elements[0].opacity,.3);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...receipt.elements[0],fills:Array(9).fill(fills[0])}]}).success,false);
+});
+
+
+test('nested mirrored and rotated frames convert movement consistently between page and parent coordinates', () => {
+  const parents=[{rotation:30,flipX:true},{rotation:-40,flipY:true}];
+  const world=transformLayerVector(parents,3,-7),local=transformLayerVector(parents,world.x,world.y,true);
+  assert.ok(Math.abs(local.x-3)<1e-9&&Math.abs(local.y+7)<1e-9);
+  assert.deepEqual(transformLayerVector([{flipX:true}],2,1,true),{x:-2,y:1});
+  assert.deepEqual(transformLayerVector([],2,1,true),{x:2,y:1});
+});
+
+test('independent corners and padding survive quote and printer saves with explicit zero and legacy fallbacks', () => {
+  const style = { radius: 7, cornerRadii: { topLeft: 0, topRight: 2, bottomRight: 3, bottomLeft: 4 }, padding: 8, paddingSides: { top: 1, right: 0, bottom: 3, left: 4 } };
+  const quote = defaultQuoteDesign(); Object.assign(quote.sections[0], style); quote.sections[0].elements = [{ key: 'company-name', ...style }];
+  const saved = normalizeQuoteDesign(quote), print = templateSchema.parse({ ...classicReceiptTemplate(), elements: [{ ...newElement('text', 72), ...style }] });
+  for (const layer of [saved.sections[0], saved.sections[0].elements![0], print.elements[0]]) {
+    assert.deepEqual(layerCornerRadii(layer), [0, 2, 3, 4]); assert.deepEqual(layerPadding(layer), [1, 0, 3, 4]);
+    assert.deepEqual(layerBoxStyle(layer), { borderRadius: '0mm 2mm 3mm 4mm', padding: '1mm 0mm 3mm 4mm' });
+  }
+  assert.deepEqual(layerCornerRadii({ radius: 2 }), [2, 2, 2, 2]); assert.deepEqual(layerPadding({ padding: 3 }), [3, 3, 3, 3]);
+  assert.deepEqual(layerBoxStyle({}), { borderRadius: undefined, padding: undefined });
+  for (const invalid of [{ padding: -1 }, { paddingSides: { ...style.paddingSides, right: Infinity } }, { cornerRadii: { ...style.cornerRadii, bottomLeft: 101 } }, { paddingSides: { top: 1 } }]) {
+    assert.equal(templateSchema.safeParse({ ...print, elements: [{ ...print.elements[0], ...invalid }] }).success, false);
+  }
+});
+
+test('receipt vertical offsets support upward movement without switching out of flow', () => {
+  const receipt = classicReceiptTemplate(); receipt.elements[0].gapBefore = -2;
+  const saved = templateSchema.parse(JSON.parse(JSON.stringify(receipt)));
+  assert.equal(saved.elements[0].gapBefore, -2); assert.notEqual(saved.elements[0].placement, 'absolute');
+  for (const gapBefore of [-301, 301, NaN]) assert.equal(templateSchema.safeParse({ ...receipt, elements: [{ ...receipt.elements[0], gapBefore }] }).success, false);
+});
+
+test('text backgrounds save independently of text fill and legacy inverse paints convert only on colour edits', () => {
+  const style = { background: '#123456', backgroundOpacity: .35, backgroundVisible: false, color: '#fedcba', fillOpacity: .8 };
+  const quote = defaultQuoteDesign(); Object.assign(quote.sections[0], style); quote.sections[0].elements = [{ key: 'company-name', ...style }];
+  const savedQuote = normalizeQuoteDesign(quote), savedPrint = templateSchema.parse({ ...classicReceiptTemplate(), elements: [{ ...newElement('text',72), ...style }] });
+  for (const layer of [savedQuote.sections[0], savedQuote.sections[0].elements![0], savedPrint.elements[0]]) { assert.equal(layer.background, style.background); assert.equal(layer.backgroundOpacity, .35); assert.equal(layer.backgroundVisible, false); assert.equal(layer.fillOpacity, .8); }
+  assert.equal(templateSchema.safeParse({ ...savedPrint, elements: [{ ...savedPrint.elements[0], backgroundOpacity: 2 }] }).success, false);
+  const legacy = { ...newElement('text',72), inverse: true, text: 'Savings', fillOpacity: .6 }, before = JSON.stringify(legacy);
+  const shown = printLayerTree({ ...classicReceiptTemplate(), elements: [legacy] })[0].model;
+  assert.equal(shown.color, '#ffffff'); assert.equal(shown.background, '#000000'); assert.equal(shown.backgroundOpacity, .6); assert.equal(JSON.stringify(legacy), before);
+  patchPrintPresentation(legacy, { radius: 2 }); assert.equal(legacy.inverse, true); assert.equal(legacy.background, undefined);
+  patchPrintPresentation(legacy, { background: '#ff0000', backgroundOpacity: .5 });
+  assert.equal(legacy.inverse, false); assert.equal(legacy.color, '#ffffff'); assert.equal(legacy.fillOpacity, .6); assert.equal(legacy.background, '#ff0000'); assert.equal(legacy.backgroundOpacity, .5);
+  const layered = { ...newElement('field',72), inverse: true, fills: [{ color: '#ff0000', opacity: .4, visible: true }] };
+  assert.deepEqual(printElementPresentation(layered).fills, [{ color: '#ffffff', opacity: .4, visible: true }]);
+});
+
+test('four-sided margins retain legacy receipt gaps and share save and bounds validation', () => {
+  const element = { ...newElement('text',72), width: 20, gapBefore: -1, gapAfter: 3 };
+  assert.deepEqual(printElementMargins(element,true),[-1,0,3,0]); assert.deepEqual(printElementMargins(element),[0,0,0,0]);
+  const style = { marginSides: { top: 1, right: 2, bottom: 3, left: 4 } };
+  Object.assign(element, style); const receipt = templateSchema.parse({...classicReceiptTemplate(),elements:[element]});
+  assert.deepEqual(printElementMargins(receipt.elements[0],true),[1,2,3,4]); setPrintFlowTop(receipt.elements[0],-2);
+  assert.deepEqual(printElementMargins(receipt.elements[0],true),[-2,2,3,4]); assert.equal(receipt.elements[0].gapBefore,undefined);
+  const quote = defaultQuoteDesign(); Object.assign(quote.sections[0],style); quote.sections[0].elements=[{key:'company-name',margin:2}];
+  const saved = normalizeQuoteDesign(quote); assert.deepEqual(saved.sections[0].marginSides,style.marginSides); assert.equal(saved.sections[0].elements![0].margin,2);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...element,marginSides:{...style.marginSides,right:100}}]}).success,false);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...element,marginSides:{...style.marginSides,left:-3}}]}).success,false);
+  assert.equal(templateSchema.safeParse({...receipt,elements:[{...element,margin:301}]}).success,false);
+});
+
+
+test('barcode formats and readable values persist without changing old code defaults', () => {
+  const original = newElement('barcode',72);
+  const template = { ...classicReceiptTemplate(), elements:[original] };
+  assert.equal(templateSchema.parse(template).elements[0].barcodeFormat, undefined);
+  for (const barcodeFormat of ['CODE128','CODE39','EAN13','EAN8','UPC','ITF14'] as const) {
+    const code = { ...original, barcodeFormat, barcodeDisplayValue:false };
+    const settings = printSettingsSchema.parse({ ...emptyPrintSettings(),templates:[{ ...template,id:'custom-codes',elements:[code] }] });
+    assert.equal(settings.templates[0].elements[0].barcodeFormat,barcodeFormat);
+    assert.equal(settings.templates[0].elements[0].barcodeDisplayValue,false);
+  }
+  assert.equal(templateSchema.safeParse({ ...template,elements:[{ ...original,barcodeFormat:'UNSUPPORTED' }] }).success,false);
+});
+
+
+test('default Tax Receipt is entirely composed of public editor layers and data', () => {
+  const template=classicReceiptTemplate();
+  assert.ok(template.elements.every(e=>['text','field','items','taxsummary','line','qrcode','logo','shape','frame','barcode'].includes(e.type)));
+  assert.ok(template.elements.every(e=>!e.inverse&&e.gapBefore===undefined&&e.gapAfter===undefined));
+  assert.ok(template.elements.some(e=>e.type==='text'&&e.text==='TAX SUMMARY'));
+  assert.deepEqual(template.elements.find(e=>e.type==='taxsummary')!.taxColumns!.map(c=>c.field),['tax.rate','tax.sgst','tax.cgst','tax.total']);
+  const savings=template.elements.find(e=>e.field==='receiptSavings')!;
+  assert.equal(savings.color,'#ffffff');assert.equal(savings.background,'#000000');
+  assert.equal(fieldValue(receiptPhotoFixture,'receiptTaxGroups'),'2');
+  assert.equal(fieldValue({...receiptPhotoFixture,entries:[]},'receiptTaxGroups'),'');
+  assert.equal(upgradeReceiptToolTemplate(template),template);
+  assert.ok(templateSchema.safeParse(template).success);
+});
+
+test('legacy starter upgrades only the local design, preserving identities, custom styles and source data', () => {
+  const legacy=legacyReceiptFixture(),gst=legacy.elements.find(e=>e.field==='gstin')!;gst.background='#123456';
+  const before=JSON.stringify(legacy),taxId=legacy.elements.find(e=>e.type==='taxsummary')!.id;
+  const upgraded=upgradeReceiptToolTemplate(legacy);
+  assert.equal(JSON.stringify(legacy),before);assert.equal(upgraded.id,legacy.id);assert.equal(upgraded.name,legacy.name);
+  assert.equal(upgraded.elements.find(e=>e.id===gst.id)!.background,'#123456');
+  assert.equal(upgraded.elements.find(e=>e.id===taxId)!.taxColumns!.length,4);
+  const taxRows=receiptSummary(receiptPhotoFixture).tax, taxColumns=upgraded.elements.find(e=>e.id===taxId)!.taxColumns!;
+  assert.deepEqual(taxColumns.map(c=>tableCellValue(taxRows[0],c.field,0)),['5','5.95','5.95','11.90']);
+  assert.deepEqual(taxColumns.map(c=>tableColumnTotal(taxRows,c)),['TOTAL','21.49','21.49','42.98']);
+  assert.ok(upgraded.elements.some(e=>e.type==='text'&&e.text==='TAX SUMMARY'));
+  assert.ok(upgraded.elements.every(e=>!e.inverse&&e.type!=='spacer'));
+  assert.ok(templateSchema.safeParse(upgraded).success);assert.equal(upgradeReceiptToolTemplate(upgraded),upgraded);
+});
+
+test('starter conversion leaves unrelated and structurally incompatible saved designs unchanged', () => {
+  const unrelated=legacyReceiptFixture(); unrelated.elements[0].id='my-company-layer';
+  assert.equal(upgradeReceiptToolTemplate(unrelated),unrelated);
+  const fixed=legacyReceiptFixture(); fixed.elements.find(e=>e.type==='taxsummary')!.placement='absolute';
+  assert.equal(upgradeReceiptToolTemplate(fixed),fixed);
+  const full=legacyReceiptFixture();
+  while(full.elements.length<40) full.elements.push(newElement('text',72));
+  assert.equal(upgradeReceiptToolTemplate(full),full);
+});
+
+test('printer group geometry uses exact millimetres and repairs only old sub-pixel frame undersizing', () => {
+  const frame={...newElement('frame',72),id:'payment',x:2,y:20,width:67.88,height:55.88};
+  const caption={...newElement('text',72),id:'caption',parentId:frame.id,x:0,y:0,height:7,text:'Scan to pay',resizeMode:'auto-height' as const};
+  const qr={...newElement('qrcode',72),id:'payment-qr',parentId:frame.id,x:10,y:8,width:48,height:48,text:'upi://pay'};
+  const template={...classicReceiptTemplate(),elements:[frame,caption,qr]};
+  assert.equal(templateSchema.safeParse(template).success,false);
+  const children=JSON.stringify([caption,qr]); Object.assign(frame,printFrameMoveSize(template,frame));
+  assert.deepEqual({width:frame.width,height:frame.height},{width:68,height:56});
+  assert.equal(templateSchema.safeParse(template).success,true);assert.equal(JSON.stringify([caption,qr]),children);
+  assert.deepEqual(printLayerLocalBox(template,frame,{payment:{x:2,y:20,width:68,height:56}}),{x:2,y:20,width:68,height:56});
+  Object.assign(frame,{rotation:90,flipX:true,paddingSides:{top:2,right:0,bottom:0,left:3}});
+  assert.deepEqual(printLayerLocalBox(template,qr,{payment:{x:2,y:20,width:68,height:56},'payment-qr':{x:6,y:21,width:48,height:48}}),{x:13,y:10,width:48,height:48});
+  frame.width=60;assert.equal(printFrameMoveSize(template,frame).width,60);
+  assert.equal(templateSchema.safeParse(template).success,false,'Real overflow must still fail validation');
+});
+
+test('printer clipboard depth counts descendants and rejects cycles without losing external parent scope', () => {
+  assert.equal(printTreeDepth([]),0);
+  assert.equal(printTreeDepth([{id:'copy',parentId:'outside'},{id:'child',parentId:'copy'}]),2);
+  assert.equal(printTreeDepth(Array.from({length:8},(_,i)=>({id:String(i),parentId:i?String(i-1):undefined}))),8);
+  assert.equal(printTreeDepth([{id:'a',parentId:'b'},{id:'b',parentId:'a'}]),Infinity);
 });

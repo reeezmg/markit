@@ -4,7 +4,7 @@ import { labelVariables } from './label-variables';
 
 const relatedRoots = new Set(labelVariables.map(v => v.key.split('.')[0]));
 export async function loadLabelVariables(items: any[], template: PrintTemplate) {
-  const related = template.elements.some(e => e.field.includes('.') && relatedRoots.has(e.field.split('.')[0]));
+  const related = template.elements.some(e => [e.field, ...(e.rules || []).flatMap(rule => rule.conditions.flatMap(condition => [condition.field, ...(condition.source === 'field' ? [condition.value] : [])]))].some(field => field.includes('.') && relatedRoots.has(field.split('.')[0])));
   const usesItemBarcode = template.elements.some(e => e.type === 'barcode' && ['barcode', 'item.barcode'].includes(e.field));
   const pending = items.filter(item => (related && !item.labelVariablesLoaded) || (usesItemBarcode && !labelBarcode(item) && item.itemId));
   if (!pending.length) return items;

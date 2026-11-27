@@ -1,4 +1,4 @@
 {
-  "compilerOptions": {"target":"ES2022","module":"ESNext","moduleResolution":"bundler","strictNullChecks":true,"skipLibCheck":true,"noEmit":true,"allowSyntheticDefaultImports":true,"baseUrl":"..","paths":{"~/*":["./*"]},"types":["node"]},
+  "compilerOptions": {"target":"ES2022","module":"ESNext","moduleResolution":"bundler","strictNullChecks":true,"skipLibCheck":true,"noEmit":true,"allowSyntheticDefaultImports":true,"baseUrl":"..","paths":{"~/*":["./*"],"#imports":["./tests/after-sales-ui-runtime.ts"]},"types":["node"]},
   "include":["crm-globals.d.ts","../utils/crm.ts","../server/utils/crm*.ts","../server/api/crm/**/*.ts","../server/api/cron/crm.get.ts","../components/CRM/**/*.vue","../pages/crm.vue","../pages/crm/**/*.vue"]
 }

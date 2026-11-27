@@ -16,8 +16,8 @@ Staff row actions include **Add task**, prefilling that row's client and company
 the CRM-mode toolbar also offers an unlinked **Add task** action. The shared
 `CRM/TaskComposer.vue` authorizes the selected company and opens the existing
 activity editor. Client CRM details offers Add task alongside Add activity.
-The authorized 2026-11-19 schema push completed the missing CompanyClient columns
-and account foreign key; see ARCH-crm.md for the verified installation state.
+CompanyClient retains the two CRM metadata columns. The former business-account
+relation was removed on 23 November 2026; see ARCH-crm.md for the verified state.
 
 ### Client (`/client`)
 

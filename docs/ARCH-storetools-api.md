@@ -28,7 +28,8 @@ and business operations. All new CRM model access is denied through generated AP
 |---|---|
 | `bootstrap` | GET readiness, authorized actor, active staff, defaults/settings and currency |
 | `clients` | GET existing company clients; PUT `:id` updates CRM attributes only; POST creation rejected |
-| `accounts`, `deals`, `activities` | GET filtered/paged records; POST create |
+| `deals`, `activities` | GET filtered/paged records; POST create |
+| `accounts`, `accounts/*` | Retired; all methods return 410 after the existing actor/company checks |
 | `:resource/:id` | GET detail/activity/audit context; PUT versioned edit |
 | `:resource/bulk` | POST manager assignment or archive/restore of explicit versioned rows |
 | `:resource/export` | GET filtered CSV, capped at 5,000 matches with truncation header |

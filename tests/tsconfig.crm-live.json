@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.crm.json",
+  "include": [
+    "crm-globals.d.ts",
+    "../scripts/test-crm-live.ts",
+    "../scripts/verify-crm-live.ts",
+    "../scripts/crm-live-browser-bridge.ts"
+  ]
+}

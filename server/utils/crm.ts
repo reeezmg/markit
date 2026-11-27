@@ -6,7 +6,7 @@ export type CrmDb={query:(sql:string,args?:any[])=>Promise<any>}
 // Read identity from Client on every request. Only CRM attributes live on its
 // existing company membership; this derived source is not a table or SQL view.
 export const crmClientSource=`(SELECT cc.company_id,cc.client_id AS id,cc.client_id,c.name,coalesce(c.email,'') AS email,c.phone,
- cc.crm_account_id AS account_id,coalesce(cc.crm_data->>'ownerId','') AS owner_id,
+ coalesce(cc.crm_data->>'ownerId','') AS owner_id,
  coalesce(cc.crm_data->>'jobTitle','') AS job_title,
  coalesce(cc.crm_data->>'lifecycle',CASE WHEN cc.pipeline_status='close' THEN 'CUSTOMER' ELSE 'LEAD' END) AS lifecycle,
  coalesce(cc.crm_data->>'leadStatus',CASE WHEN cc.pipeline_status='reject' THEN 'UNQUALIFIED' WHEN cc.pipeline_status IN('viewing','close') THEN 'QUALIFIED' WHEN cc.pipeline_status='prospect' THEN 'CONTACTED' ELSE 'NEW' END) AS lead_status,
@@ -17,14 +17,14 @@ export const crmClientSource=`(SELECT cc.company_id,cc.client_id AS id,cc.client
  coalesce((cc.crm_data->>'updatedAt')::timestamptz,(cc.crm_data->>'createdAt')::timestamptz) AS updated_at,
  (cc.crm_data->>'convertedAt')::timestamptz AS converted_at
  FROM company_clients cc JOIN clients c ON c.id=cc.client_id WHERE c.deleted=false)`
-export const crmTables={clients:crmClientSource,accounts:'crm_accounts',deals:'crm_deals',activities:'crm_activities'} as const
-export async function crmReady(db:CrmDb){return !!(await db.query(`SELECT to_regclass('public.crm_accounts') IS NOT NULL
-  AND to_regclass('public.crm_deals') IS NOT NULL AND to_regclass('public.crm_activities') IS NOT NULL AND to_regclass('public.crm_settings') IS NOT NULL
+export const crmTables={clients:crmClientSource,deals:'crm_deals',activities:'crm_activities'} as const
+export async function crmReady(db:CrmDb){return !!(await db.query(`SELECT to_regclass('public.crm_deals') IS NOT NULL AND to_regclass('public.crm_activities') IS NOT NULL AND to_regclass('public.crm_settings') IS NOT NULL
   AND to_regclass('public.crm_audit') IS NOT NULL AND to_regclass('public.crm_document_links') IS NOT NULL
-  AND (SELECT count(*)=3 FROM information_schema.columns WHERE table_schema='public' AND table_name='company_clients' AND column_name IN('crm_data','crm_version','crm_account_id')) AS ready`)).rows[0]?.ready}
+  AND (SELECT count(*)=2 FROM information_schema.columns WHERE table_schema='public' AND table_name='company_clients' AND column_name IN('crm_data','crm_version')) AS ready`)).rows[0]?.ready}
 export async function crmTableReady(db:CrmDb,table:string){return !!(await db.query('SELECT to_regclass($1) IS NOT NULL AS ready',['public.'+table])).rows[0]?.ready}
 export function crmRow(row:any):Record<string,any>{
-  const result=Object.fromEntries(Object.entries(row).map(([key,value])=>[key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase()),value instanceof Date?value.toISOString():value]))
+  const {account_id,account_name,accountId,accountName,...fields}=row
+  const result=Object.fromEntries(Object.entries(fields).map(([key,value])=>[key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase()),value instanceof Date?value.toISOString():value]))
   if(result.attachments&&!Array.isArray(result.attachments)){
     const metadata=result.attachments as any
     result.attachments=metadata.references||[];result.segmentKey=metadata.segmentKey||null;result.segmentName=metadata.segmentName||''
@@ -51,22 +51,21 @@ export async function crmRead(db:CrmDb,company:string,kind:CrmKind,id:string,loc
   if(!row)throw crmError('CRM record not found.',404);return row
 }
 const fieldMaps:Record<CrmKind,Record<string,string>>={
-  clients:{jobTitle:'job_title',lifecycle:'lifecycle',leadStatus:'lead_status',source:'source',ownerId:'owner_id',tags:'tags',description:'description',accountId:'account_id',customFields:'custom_fields'},
-  accounts:{name:'name',industry:'industry',website:'website',email:'email',phone:'phone',address:'address',ownerId:'owner_id',tags:'tags',description:'description'},
-  deals:{name:'name',clientId:'client_id',accountId:'account_id',pipelineKey:'pipeline_key',stageKey:'stage_key',status:'status',value:'value',probability:'probability',expectedClose:'expected_close',lossReason:'loss_reason',ownerId:'owner_id',source:'source',tags:'tags',description:'description'},
-  activities:{clientId:'client_id',accountId:'account_id',dealId:'deal_id',kind:'kind',subject:'subject',body:'body',status:'status',priority:'priority',ownerId:'owner_id',dueAt:'due_at',endAt:'end_at',recurrenceDays:'recurrence_days',attachments:'attachments'},
+  clients:{jobTitle:'job_title',lifecycle:'lifecycle',leadStatus:'lead_status',source:'source',ownerId:'owner_id',tags:'tags',description:'description',customFields:'custom_fields'},
+  deals:{name:'name',clientId:'client_id',pipelineKey:'pipeline_key',stageKey:'stage_key',status:'status',value:'value',probability:'probability',expectedClose:'expected_close',lossReason:'loss_reason',ownerId:'owner_id',source:'source',tags:'tags',description:'description'},
+  activities:{clientId:'client_id',dealId:'deal_id',kind:'kind',subject:'subject',body:'body',status:'status',priority:'priority',ownerId:'owner_id',dueAt:'due_at',endAt:'end_at',recurrenceDays:'recurrence_days',attachments:'attachments'},
 }
 export function crmWhere(kind:CrmKind,company:string,input:any,settings:CrmSettings){
   const f=normalizeCrmFilters(input),args:any[]=[company],where=['r.company_id=$1']
   const bind=(value:any)=>{args.push(value);return '$'+args.length}
   if(f.archived!=='all')where.push('r.archived='+bind(f.archived==='true'))
   if(kind==='activities'&&f.segmentKey)where.push(`r.attachments->>'segmentKey'=${bind(f.segmentKey)}`)
-  const fields:Record<string,string>={ownerId:'owner_id',accountId:'account_id',clientId:'client_id',dealId:'deal_id',lifecycle:'lifecycle',leadStatus:'lead_status',source:'source',pipelineKey:'pipeline_key',stageKey:'stage_key',status:'status',kind:'kind',priority:'priority'}
+  const fields:Record<string,string>={ownerId:'owner_id',clientId:'client_id',dealId:'deal_id',lifecycle:'lifecycle',leadStatus:'lead_status',source:'source',pipelineKey:'pipeline_key',stageKey:'stage_key',status:'status',kind:'kind',priority:'priority'}
   const columns=new Set(Object.values(fieldMaps[kind]))
   for(const [key,column]of Object.entries(fields))if(f[key]&&columns.has(column))where.push(`r.${column}=${bind(f[key])}`)
-  if(f.q)where.push(`concat_ws(' ',${kind==='activities'?'r.subject,r.body':'r.name,r.description'}${['clients','accounts'].includes(kind)?',r.phone,r.email':''}) ILIKE ${bind('%'+f.q+'%')}`)
+  if(f.q)where.push(`concat_ws(' ',${kind==='activities'?'r.subject,r.body':'r.name,r.description'}${kind==='clients'?',r.phone,r.email':''}) ILIKE ${bind('%'+f.q+'%')}`)
   if(f.tag&&kind!=='activities')where.push(`${bind(f.tag)}=ANY(r.tags)`)
-  if(kind==='clients'&&f.minScore!=null){const w=settings.scoring;where.push(`LEAST(100,(CASE WHEN r.email<>'' THEN ${w.email} ELSE 0 END)+(CASE WHEN r.phone<>'' THEN ${w.phone} ELSE 0 END)+(CASE WHEN r.account_id IS NOT NULL THEN ${w.account} ELSE 0 END)+(CASE WHEN r.lead_status='QUALIFIED' THEN ${w.qualified} ELSE 0 END))>=${bind(f.minScore)}`)}
+  if(kind==='clients'&&f.minScore!=null){const w=settings.scoring;where.push(`LEAST(100,(CASE WHEN r.email<>'' THEN ${w.email} ELSE 0 END)+(CASE WHEN r.phone<>'' THEN ${w.phone} ELSE 0 END)+(CASE WHEN r.lead_status='QUALIFIED' THEN ${w.qualified} ELSE 0 END))>=${bind(f.minScore)}`)}
   const date=kind==='activities'?"(r.due_at AT TIME ZONE 'Asia/Kolkata')::date":kind==='deals'?'r.expected_close':"(r.created_at AT TIME ZONE 'Asia/Kolkata')::date"
   if(f.from)where.push(`${date}>=${bind(f.from)}::date`);if(f.to)where.push(`${date}<=${bind(f.to)}::date`)
   if(kind==='activities'&&f.due==='OVERDUE')where.push("r.status='OPEN' AND r.due_at<now()")
@@ -78,9 +77,8 @@ export async function crmList(db:CrmDb,actor:CrmActor,kind:CrmKind,input:any,exp
   const {settings}=await readCrmSettings(db,actor.companyId),{sql,args}=crmInput(()=>crmWhere(kind,actor.companyId,input,settings))
   const page=Math.max(1,Math.min(100000,Math.floor(Number(input.page)||1))),limit=exporting?5000:Math.max(1,Math.min(200,Math.floor(Number(input.pageSize)||30)))
   const total=Number((await db.query(`SELECT count(*)::int AS count FROM ${crmTables[kind]} r WHERE ${sql}`,args)).rows[0].count)
-  const select=`r.*,cu.name AS owner_name${kind==='deals'?',r.expected_close::text AS expected_close':''}${['clients','deals','activities'].includes(kind)?',a.name AS account_name':''}${['deals','activities'].includes(kind)?',c.name AS client_name':''}${kind==='activities'?',d.name AS deal_name':''}`
+  const select=`r.*,cu.name AS owner_name${kind==='deals'?',r.expected_close::text AS expected_close':''}${['deals','activities'].includes(kind)?',c.name AS client_name':''}${kind==='activities'?',d.name AS deal_name':''}`
   const joins=`LEFT JOIN company_users cu ON cu.company_id=r.company_id AND cu.user_id=r.owner_id
-    ${['clients','deals','activities'].includes(kind)?'LEFT JOIN crm_accounts a ON a.id=r.account_id AND a.company_id=r.company_id':''}
     ${['deals','activities'].includes(kind)?'LEFT JOIN clients c ON c.id=r.client_id AND c.deleted=false':''}
     ${kind==='activities'?'LEFT JOIN crm_deals d ON d.id=r.deal_id AND d.company_id=r.company_id':''}`
   const rows=(await db.query(`SELECT ${select} FROM ${crmTables[kind]} r ${joins} WHERE ${sql}
@@ -88,12 +86,10 @@ export async function crmList(db:CrmDb,actor:CrmActor,kind:CrmKind,input:any,exp
   return {rows:rows.map((r:any)=>({...crmRow(r),...(kind==='clients'?{score:crmScore(r,settings)}:{})})),total,page,pageSize:limit,truncated:exporting&&total>limit}
 }
 async function crmRelations(db:CrmDb,actor:CrmActor,kind:CrmKind,body:any){
-  for(const [field,target]of [['dealId','deals'],['clientId','clients'],['accountId','accounts']] as const)if(body[field]&&!(kind==='clients'&&field==='clientId')){
+  for(const [field,target]of [['dealId','deals'],['clientId','clients']] as const)if(body[field]&&!(kind==='clients'&&field==='clientId')){
     const row=await crmRead(db,actor.companyId,target,body[field]);if(row.archived)throw crmError('Choose an active '+target.slice(0,-1)+'.')
-    if(field==='clientId'&&body.accountId&&row.account_id&&body.accountId!==row.account_id)throw crmError('The contact belongs to a different business account.')
-    if(field==='dealId'&&((body.clientId&&row.client_id&&body.clientId!==row.client_id)||(body.accountId&&row.account_id&&body.accountId!==row.account_id)))throw crmError('The activity must match its deal’s contact and business account.')
-    if(field==='dealId'){body.clientId=body.clientId||row.client_id||null;body.accountId=body.accountId||row.account_id||null}
-    if(field==='clientId')body.accountId=body.accountId||row.account_id||null
+    if(field==='dealId'&&body.clientId&&row.client_id&&body.clientId!==row.client_id)throw crmError('The activity must match its deal?s client.')
+    if(field==='dealId')body.clientId=body.clientId||row.client_id||null
   }
 
 }
@@ -133,9 +129,9 @@ export async function saveCrmRecord(db:CrmDb,actor:CrmActor,kind:CrmKind,input:a
   if(kind==='deals'&&body.status==='WON'&&old?.status!=='WON'&&settings.automations.wonFollowUpDays)await createCrmFollowUp(db,actor,body.clientId,recordId,body.ownerId,'Follow up after '+body.name,settings.automations.wonFollowUpDays,'won:'+recordId)
   if(kind==='activities'&&body.status==='DONE'&&old?.status!=='DONE'&&body.recurrenceDays){
     const at=new Date(Math.max(Date.parse(body.dueAt),Date.now())+body.recurrenceDays*86400000)
-    await db.query(`INSERT INTO crm_activities(id,company_id,client_id,account_id,deal_id,kind,subject,body,status,priority,owner_id,due_at,recurrence_days,recurrence_key,created_by,attachments)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,'OPEN',$9,$10,$11,$12,$13,$14,$15::jsonb) ON CONFLICT(company_id,recurrence_key) DO NOTHING`,
-      [randomUUID(),actor.companyId,body.clientId,body.accountId,body.dealId,body.kind,body.subject,body.body,body.priority,body.ownerId,at,body.recurrenceDays,'repeat:'+recordId,actor.userId,activityReferences(body)])
+    await db.query(`INSERT INTO crm_activities(id,company_id,client_id,deal_id,kind,subject,body,status,priority,owner_id,due_at,recurrence_days,recurrence_key,created_by,attachments)
+      VALUES($1,$2,$3,$4,$5,$6,$7,'OPEN',$8,$9,$10,$11,$12,$13,$14::jsonb) ON CONFLICT(company_id,recurrence_key) DO NOTHING`,
+      [randomUUID(),actor.companyId,body.clientId,body.dealId,body.kind,body.subject,body.body,body.priority,body.ownerId,at,body.recurrenceDays,'repeat:'+recordId,actor.userId,activityReferences(body)])
   }
   return crmRow(await crmRead(db,actor.companyId,kind,recordId))
 }
@@ -152,8 +148,8 @@ async function saveCrmClient(db:CrmDb,actor:CrmActor,input:any,id?:string){
   const at=new Date().toISOString(),first=!old.version
   const data={ownerId:body.ownerId,jobTitle:body.jobTitle,lifecycle:body.lifecycle,leadStatus:body.leadStatus,source:body.source,tags:body.tags,customFields:body.customFields,description:body.description,
     createdBy:old.created_by||actor.userId,createdAt:old.created_at||at,updatedAt:at,convertedAt:body.lifecycle==='CUSTOMER'?(old.converted_at||at):old.converted_at||null}
-  const result=await db.query('UPDATE company_clients SET crm_data=$4::jsonb,crm_account_id=$5,crm_version=crm_version+1 WHERE company_id=$1 AND client_id=$2 AND crm_version=$3 AND status=true RETURNING client_id',
-    [actor.companyId,id,input.version,JSON.stringify(data),body.accountId])
+  const result=await db.query('UPDATE company_clients SET crm_data=$4::jsonb,crm_version=crm_version+1 WHERE company_id=$1 AND client_id=$2 AND crm_version=$3 AND status=true RETURNING client_id',
+    [actor.companyId,id,input.version,JSON.stringify(data)])
   if(!result.rowCount)throw crmError('This membership changed. Reload before saving.',409)
   await crmAudit(db,actor,'clients',id,'CRM attributes updated',old,data)
   if(first&&body.lifecycle==='LEAD'&&settings.automations.newLeadFollowUpDays)await createCrmFollowUp(db,actor,id,null,body.ownerId,'Follow up with '+old.name,settings.automations.newLeadFollowUpDays,'lead:'+id)

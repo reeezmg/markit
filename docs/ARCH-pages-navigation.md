@@ -26,7 +26,7 @@ ERP sidebar links include `/erp/recurring-invoices` and `/erp/retainer-invoices`
 These pages provide a single-company form toolbar and lock company selection while
 editing, viewing a selected document or saving. See `ARCH-pages-erp.md` for workflows.
 
-These Vue files are route parents. Each renders `<NuxtPage />` for its child route inside a titled dashboard panel. They do not themselves load or mutate the feature's data; consult the child page guide for actual behavior. The one exception is `pages/settings.vue`, which also renders the settings tabs.
+These Vue files are route parents. They normally render `<NuxtPage />` inside a titled dashboard panel. They do not themselves load or mutate the feature's data; consult the child page guide for actual behavior. `pages/settings.vue` also renders settings tabs. `pages/erp.vue` omits its navbar/dashboard wrapper for children with `documentDesigner` metadata: `/erp/quotes/design` and `/erp/sales-orders/design`. Those authenticated page files also set `layout: false` to fill the viewport without the application sidebar. The editor's Save and Back controls live in its right inspector; see `ARCH-pages-erp.md`. Label and receipt editors use the standalone authenticated `/print-design/:kind/:id` route with `layout: false`; Printer Settings and Sales Settings hand off company-scoped drafts and retain their return route. See `ARCH-pages-settings.md`, Printer.
 
 | Parent file | Title / child area |
 |---|---|
